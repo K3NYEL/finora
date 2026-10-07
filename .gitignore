@@ -13,8 +13,8 @@
 migrate_working_dir/
 
 # VSCode and github
-.vscode
-.github
+.vscode/
+.github/
 
 # IntelliJ related
 *.iml
