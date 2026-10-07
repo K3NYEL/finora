@@ -1,14 +1,121 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../app/settings_provider.dart';
+import '../../../../core/platform/update_service.dart';
 import '../../../../core/settings/app_preferences.dart';
+import '../../../../shared/widgets/update_dialog.dart';
 
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  bool _checkingForUpdate = false;
+  String? _currentVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentVersion();
+  }
+
+  Future<void> _loadCurrentVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+
+      if (!mounted) return;
+
+      setState(() {
+        _currentVersion = packageInfo.version;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _currentVersion = 'Desconocida';
+      });
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (_checkingForUpdate) return;
+
+    setState(() {
+      _checkingForUpdate = true;
+    });
+
+    try {
+      final update = await UpdateService.checkForUpdate();
+
+      if (!mounted) return;
+
+      if (update != null) {
+        await showUpdateDialog(context, update);
+      } else {
+        await _showUpdateMessage(
+          title: 'Finora está actualizada',
+          message: 'No hay una versión nueva disponible para este dispositivo.',
+          icon: Icons.check_circle_outline_rounded,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      await _showUpdateMessage(
+        title: 'No se pudo comprobar',
+        message: 'No fue posible comprobar las actualizaciones. '
+            'Verifica tu conexión a Internet e inténtalo nuevamente.',
+        icon: Icons.cloud_off_outlined,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingForUpdate = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showUpdateMessage({
+    required String title,
+    required String message,
+    required IconData icon,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                icon,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title),
+              ),
+            ],
+          ),
+          content: Text(message),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
 
     return ListView(
@@ -126,15 +233,25 @@ class SettingsPage extends ConsumerWidget {
             _SettingsTile(
               icon: Icons.system_update_outlined,
               title: 'Buscar actualizaciones',
-              subtitle: 'Comprobar si existe una nueva versión',
-              onTap: () {
-                // Próximamente conectaremos UpdateService.
-              },
+              subtitle: _checkingForUpdate
+                  ? 'Comprobando la última versión...'
+                  : 'Comprobar si existe una nueva versión',
+              trailing: _checkingForUpdate
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: _checkingForUpdate ? null : _checkForUpdate,
             ),
-            const _SettingsTile(
+            _SettingsTile(
               icon: Icons.info_outline,
               title: 'Versión actual',
-              subtitle: '0.2.0',
+              subtitle:
+                  _currentVersion == null ? 'Cargando...' : 'v$_currentVersion',
             ),
           ],
         ),
@@ -157,11 +274,15 @@ class SettingsPage extends ConsumerWidget {
               icon: Icons.description_outlined,
               title: 'Licencias',
               subtitle: 'Licencias de código abierto',
-              onTap: () {
+              onTap: () async {
+                final packageInfo = await PackageInfo.fromPlatform();
+
+                if (!context.mounted) return;
+
                 showLicensePage(
                   context: context,
                   applicationName: 'Finora',
-                  applicationVersion: '0.2.0',
+                  applicationVersion: packageInfo.version,
                 );
               },
             ),
