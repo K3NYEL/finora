@@ -1,4 +1,0 @@
-storePassword=CAMBIA_ESTA_CLAVE
-keyPassword=CAMBIA_ESTA_CLAVE
-keyAlias=finora
-storeFile=/ruta/absoluta/finora-upload-keystore.jks
