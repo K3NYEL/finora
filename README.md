@@ -1,4 +1,4 @@
-# finora
+# Finora
 
 A new Flutter project.
 
