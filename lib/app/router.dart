@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/database/database.dart';
 import '../core/platform/update_service.dart';
+import '../shared/widgets/update_dialog.dart';
 import 'shell/app_shell.dart';
 import '../features/accounts/presentation/pages/accounts_page.dart';
 import '../features/dashboard/presentation/pages/dashboard_page.dart';
@@ -86,18 +87,35 @@ class _SplashScreenState extends State<SplashScreen>
       debugPrint('[FINORA] Base de datos OK');
 
       debugPrint('[FINORA] Comprobando actualización...');
-      await UpdateService.checkForUpdate();
+      final update = await UpdateService.checkForUpdate();
       debugPrint('[FINORA] UpdateService OK');
+
+      if (!mounted) return;
+
+      if (update != null) {
+        debugPrint(
+          '[FINORA] Nueva versión disponible: ${update.latestVersion}',
+        );
+
+        await showUpdateDialog(context, update);
+      }
+
+      if (!mounted) return;
+
+      _redirectTimer = Timer(
+        Duration.zero,
+        () => context.go('/'),
+      );
     } catch (e, stackTrace) {
       debugPrint('[FINORA] ERROR DURANTE INICIALIZACIÓN: $e');
       debugPrint('$stackTrace');
-    } finally {
-      if (mounted) {
-        _redirectTimer = Timer(
-          Duration.zero,
-          () => context.go('/'),
-        );
-      }
+
+      if (!mounted) return;
+
+      _redirectTimer = Timer(
+        Duration.zero,
+        () => context.go('/'),
+      );
     }
   }
 
