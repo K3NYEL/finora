@@ -11,6 +11,7 @@ import '../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../features/statistics/presentation/pages/statistics_page.dart';
 import '../features/transactions/presentation/pages/transactions_page.dart';
 import '../features/finance/presentation/pages/transaction_form_page.dart';
+import '../features/settings/presentation/pages/settings_page.dart';
 
 const _pageDuration = Duration(milliseconds: 320);
 
@@ -27,6 +28,10 @@ final appRouter = GoRouter(
             path: '/transactions',
             builder: (_, __) => const TransactionsPage()),
         GoRoute(path: '/accounts', builder: (_, __) => const AccountsPage()),
+        GoRoute(
+          path: '/settings',
+          builder: (_, __) => const SettingsPage(),
+        ),
       ],
     ),
     GoRoute(

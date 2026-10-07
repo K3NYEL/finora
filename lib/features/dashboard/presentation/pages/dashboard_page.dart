@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -42,27 +43,36 @@ class DashboardPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        AsyncValueView(
-          state: accountsState,
-          onRetry: () => ref.invalidate(accountsProvider),
-          data: (accounts) {
-            final total = accounts.fold<double>(
-                0, (sum, account) => sum + account.balance);
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Balance total', style: DashboardStat.muted),
-                    Text(money(total),
-                        style: Theme.of(context).textTheme.headlineMedium),
-                  ],
-                ),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Finora',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tu resumen financiero',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                ],
               ),
-            );
-          },
+            ),
+            IconButton(
+              tooltip: 'Configuración',
+              onPressed: () => context.push('/settings'),
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
         ),
+        const SizedBox(height: 20),
         AsyncValueView(
           state: summaryState,
           onRetry: () => ref.invalidate(summaryProvider),
