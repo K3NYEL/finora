@@ -47,6 +47,14 @@ class UpdateService {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
 
+      debugPrint(
+        '[FINORA UPDATE] Versión instalada detectada: '
+        '${packageInfo.version}+${packageInfo.buildNumber}',
+      );
+
+      debugPrint(
+        '[FINORA UPDATE] Última versión de GitHub: $latestTag',
+      );
       if (!_isNewerVersion(latestTag, currentVersion)) {
         debugPrint(
           '[FINORA UPDATE] Finora está actualizada ($currentVersion)',
