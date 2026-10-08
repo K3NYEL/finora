@@ -1,21 +1,19 @@
 {
-  "version": "0.5.6",
-  "build": 16,
-  "release": "v0.5.6",
+  "version": "0.5.7",
+  "build": 17,
+  "release": "v0.5.7",
   "mandatory": false,
   "notes": [
-    "Correcciones relacionadas con la generación e instalación de los APK de Android.",
-    "Mejoras en el proceso de compilación de las versiones de producción.",
-    "Mejoras en la verificación de la firma de los APK.",
-    "Correcciones generales de estabilidad."
+    "Versión de prueba del sistema de actualización automática.",
+    "Mejoras generales y correcciones de estabilidad."
   ],
   "android": {
-    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_armeabi-v7a.apk",
-    "x86_64": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_x86_64.apk"
+    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.7/Finora_v0.5.7_arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v0.5.7/Finora_v0.5.7_armeabi-v7a.apk",
+    "x86_64": "https://github.com/K3NYEL/finora/releases/download/v0.5.7/Finora_v0.5.7_x86_64.apk"
   },
   "linux": {
-    "version": "0.5.6",
-    "build": 16
+    "version": "0.5.7",
+    "build": 17
   }
 }
