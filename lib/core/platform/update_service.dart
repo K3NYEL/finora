@@ -39,24 +39,28 @@ class UpdateService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        debugPrint(
-          '[FINORA UPDATE] Manifest respondió ${response.statusCode}',
+        throw UpdateCheckException(
+          'El servidor respondió HTTP ${response.statusCode}.',
         );
-        return null;
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const UpdateCheckException(
+          'El manifest no tiene un formato JSON válido.',
+        );
+      }
+      final data = decoded;
 
       final latestVersion = data['version'] as String?;
       final build = (data['build'] as num?)?.toInt();
       final release = data['release'] as String?;
       final mandatory = data['mandatory'] as bool? ?? false;
 
-      if (latestVersion == null || build == null) {
-        debugPrint(
-          '[FINORA UPDATE] Manifest inválido: faltan version/build.',
+      if (latestVersion == null || latestVersion.isEmpty || build == null || build < 1) {
+        throw const UpdateCheckException(
+          'El manifest no contiene una versión o build válidos.',
         );
-        return null;
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
@@ -89,7 +93,7 @@ class UpdateService {
       UpdateAsset? apk;
 
       if (Platform.isAndroid) {
-        apk = await _selectApk(data['android']);
+        apk = await _selectApk(data['android'], latestVersion);
       }
 
       final notes =
@@ -106,10 +110,30 @@ class UpdateService {
         notes: notes,
         apk: apk,
       );
-    } catch (e, stackTrace) {
-      debugPrint('[FINORA UPDATE] Error: $e');
+    } on SocketException catch (e, stackTrace) {
+      debugPrint('[FINORA UPDATE] Error de conexión: $e');
       debugPrint('$stackTrace');
-      return null;
+      throw const UpdateCheckException(
+        'No fue posible conectar con el servidor de actualizaciones.',
+      );
+    } on FormatException catch (e, stackTrace) {
+      debugPrint('[FINORA UPDATE] JSON inválido: $e');
+      debugPrint('$stackTrace');
+      throw const UpdateCheckException(
+        'El servidor devolvió datos de actualización inválidos.',
+      );
+    } on TimeoutException catch (e, stackTrace) {
+      debugPrint('[FINORA UPDATE] Tiempo de espera agotado: $e');
+      debugPrint('$stackTrace');
+      throw const UpdateCheckException(
+        'La comprobación de actualizaciones agotó el tiempo de espera.',
+      );
+    } on UpdateCheckException {
+      rethrow;
+    } catch (e, stackTrace) {
+      debugPrint('[FINORA UPDATE] Error inesperado: $e');
+      debugPrint('$stackTrace');
+      throw UpdateCheckException('No se pudo comprobar la actualización: $e');
     }
   }
 
@@ -180,7 +204,7 @@ class UpdateService {
     }
   }
 
-  static Future<UpdateAsset?> _selectApk(dynamic androidData) async {
+  static Future<UpdateAsset?> _selectApk(dynamic androidData, String latestVersion) async {
     if (androidData is! Map<String, dynamic>) {
       debugPrint('[FINORA UPDATE] No existe configuración Android.');
       return null;
@@ -216,7 +240,8 @@ class UpdateService {
       return null;
     }
 
-    final apkName = 'app-$architecture-release.apk';
+    final normalizedVersion = latestVersion.startsWith('v') ? latestVersion.substring(1) : latestVersion;
+    final apkName = 'Finora_v${normalizedVersion}_$architecture.apk';
 
     debugPrint('[FINORA UPDATE] APK seleccionado: $apkName');
 
@@ -257,6 +282,15 @@ class UpdateService {
           0;
     });
   }
+}
+
+class UpdateCheckException implements Exception {
+  const UpdateCheckException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class UpdateInfo {
