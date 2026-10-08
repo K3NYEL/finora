@@ -57,8 +57,7 @@ class UpdateService {
         latestBuild: latestBuild,
         releaseName: release.name,
         releaseUrl:
-            'https://github.com/K3NYEL/finora/releases/tag/' +
-            release.tagName,
+            'https://github.com/K3NYEL/finora/releases/tag/${release.tagName}',
         mandatory: false,
         notes: _extractNotes(release.body),
         apk: apk,
@@ -116,7 +115,7 @@ class UpdateService {
         ? latestVersion.substring(1)
         : latestVersion;
 
-    final apkName = 'Finora_v' + normalizedVersion + '_' + architecture + '.apk';
+    final apkName = 'Finora_v${normalizedVersion}_${architecture}.apk';
     final downloadUrl = assets[apkName];
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
