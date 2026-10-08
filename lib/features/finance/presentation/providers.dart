@@ -1,8 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/finance_repository.dart';
 import '../domain/models.dart';
+import '../../auth/presentation/session_provider.dart';
 
-final repoProvider = Provider((_) => FinanceRepository());
+final repoProvider = Provider<FinanceRepository>((ref) {
+  final user = ref.watch(sessionProvider);
+
+  if (user == null) {
+    throw StateError('No hay una sesión activa.');
+  }
+
+  return FinanceRepository(
+    userId: user.id,
+  );
+});
 final accountsProvider =
     FutureProvider((ref) => ref.watch(repoProvider).accounts());
 final movementsProvider =

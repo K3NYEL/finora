@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/database/database.dart';
 import '../core/platform/update_service.dart';
 import '../shared/widgets/update_dialog.dart';
 import 'shell/app_shell.dart';
+import '../features/auth/presentation/pages/auth_page.dart';
+import '../features/auth/presentation/session_provider.dart';
 import '../features/accounts/presentation/pages/accounts_page.dart';
 import '../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../features/statistics/presentation/pages/statistics_page.dart';
@@ -18,6 +21,10 @@ const _pageDuration = Duration(milliseconds: 320);
 final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+    GoRoute(
+      path: '/auth',
+      builder: (_, __) => const AuthPage(),
+    ),
     ShellRoute(
       builder: (_, __, child) => AppShell(child: child),
       routes: [
@@ -64,14 +71,14 @@ CustomTransitionPage<void> _page(GoRouterState state, Widget child) =>
       ),
     );
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   Timer? _redirectTimer;
   late final AnimationController _controller = AnimationController(
@@ -107,9 +114,13 @@ class _SplashScreenState extends State<SplashScreen>
 
       if (!mounted) return;
 
+      await ref.read(sessionProvider.notifier).restore();
+
+      final user = ref.read(sessionProvider);
+
       _redirectTimer = Timer(
         Duration.zero,
-        () => context.go('/'),
+        () => context.go(user == null ? '/auth' : '/'),
       );
     } catch (e, stackTrace) {
       debugPrint('[FINORA] ERROR DURANTE INICIALIZACIÓN: $e');
@@ -117,9 +128,11 @@ class _SplashScreenState extends State<SplashScreen>
 
       if (!mounted) return;
 
+      final user = ref.read(sessionProvider);
+
       _redirectTimer = Timer(
         Duration.zero,
-        () => context.go('/'),
+        () => context.go(user == null ? '/auth' : '/'),
       );
     }
   }

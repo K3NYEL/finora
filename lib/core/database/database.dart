@@ -2,6 +2,8 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'migrations/migration_002.dart';
 import 'migrations/migration_003.dart';
+import 'migrations/migration_004.dart';
+import 'migrations/migration_005.dart';
 
 class AppDatabase {
   static Database? _db;
@@ -16,7 +18,7 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), 'finora.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 5,
       onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
       onCreate: (d, _) async {
         await d.execute('''CREATE TABLE accounts(
@@ -54,10 +56,14 @@ class AppDatabase {
         }
         await applyMigration002(d);
         await applyMigration003(d);
+        await applyMigration004(d);
+        await applyMigration005(d);
       },
       onUpgrade: (d, oldVersion, newVersion) async {
         if (oldVersion < 2) await applyMigration002(d);
         if (oldVersion < 3) await applyMigration003(d);
+        if (oldVersion < 4) await applyMigration004(d);
+        if (oldVersion < 5) await applyMigration005(d);
       },
     ).then((database) {
       _db = database;

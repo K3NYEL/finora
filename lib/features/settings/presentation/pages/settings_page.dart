@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
 import '../../../../core/settings/app_preferences.dart';
@@ -114,6 +116,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cerrar sesión'),
+          content: const Text(
+            '¿Seguro que quieres cerrar tu sesión? '
+            'Tus datos permanecerán guardados en este dispositivo.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Cerrar sesión'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await ref.read(sessionProvider.notifier).clearSession();
+
+    if (!mounted) return;
+
+    context.go('/auth');
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -187,6 +222,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onTap: () {
                 // Próximamente.
               },
+            ),
+          ],
+        ),
+
+        _SettingsSection(
+          title: 'Cuenta',
+          children: [
+            _SettingsTile(
+              icon: Icons.logout_rounded,
+              title: 'Cerrar sesión',
+              subtitle: 'Salir de tu cuenta en este dispositivo',
+              onTap: _logout,
             ),
           ],
         ),

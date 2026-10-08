@@ -4,30 +4,63 @@ import '../domain/models.dart';
 import 'package:sqflite/sqflite.dart';
 
 class FinanceRepository {
+  FinanceRepository({
+    required this.userId,
+  });
+
+  final String userId;
+
   Future<Database> get _db => AppDatabase.instance;
 
   static int _toMinorUnits(double amount) => (amount * 100).round();
 
   // El balance se deriva de los movimientos: nunca queda desincronizado.
   static const _accountsSql = '''
-    SELECT a.id, a.name, a.type,
-      COALESCE(a.initial_balance_minor / 100.0, a.initial_balance)
-        + COALESCE((SELECT SUM(CASE t.type WHEN 'income'
-          THEN COALESCE(t.amount_minor / 100.0, t.amount)
-          ELSE -COALESCE(t.amount_minor / 100.0, t.amount) END)
-          FROM transactions t WHERE t.account_id = a.id), 0)
-        + COALESCE((SELECT SUM(COALESCE(amount_minor / 100.0, amount))
-          FROM transfers WHERE destination_account_id = a.id), 0)
-        - COALESCE((SELECT SUM(COALESCE(amount_minor / 100.0, amount))
-          FROM transfers WHERE source_account_id = a.id), 0) AS balance
-    FROM accounts a WHERE a.is_archived = 0''';
+  SELECT a.id, a.name, a.type,
+    COALESCE(a.initial_balance_minor / 100.0, a.initial_balance)
+      + COALESCE((
+          SELECT SUM(
+            CASE t.type
+              WHEN 'income'
+                THEN COALESCE(t.amount_minor / 100.0, t.amount)
+              ELSE -COALESCE(t.amount_minor / 100.0, t.amount)
+            END
+          )
+          FROM transactions t
+          WHERE t.account_id = a.id
+            AND t.user_id = ?
+        ), 0)
+      + COALESCE((
+          SELECT SUM(COALESCE(amount_minor / 100.0, amount))
+          FROM transfers
+          WHERE destination_account_id = a.id
+            AND user_id = ?
+        ), 0)
+      - COALESCE((
+          SELECT SUM(COALESCE(amount_minor / 100.0, amount))
+          FROM transfers
+          WHERE source_account_id = a.id
+            AND user_id = ?
+        ), 0) AS balance
+  FROM accounts a
+  WHERE a.is_archived = 0
+    AND a.user_id = ?
+''';
 
   Future<List<Account>> accounts() async {
-    final rows = await (await _db).rawQuery('$_accountsSql ORDER BY a.id');
+    final rows = await (await _db).rawQuery(
+      '$_accountsSql ORDER BY a.id',
+      [userId, userId, userId, userId],
+    );
+
     return [
       for (final r in rows)
-        Account(r['id'] as int, r['name'] as String, r['type'] as String,
-            (r['balance'] as num).toDouble())
+        Account(
+          r['id'] as int,
+          r['name'] as String,
+          r['type'] as String,
+          (r['balance'] as num).toDouble(),
+        ),
     ];
   }
 
@@ -39,6 +72,7 @@ class FinanceRepository {
       throw const AppException('El balance inicial no puede ser negativo.');
     }
     await (await _db).insert('accounts', {
+      'user_id': userId,
       'name': name.trim(),
       'type': type,
       'initial_balance': initial,
@@ -56,11 +90,17 @@ class FinanceRepository {
   }
 
   Future<Account> _account(int id) async {
-    final rows = await (await _db).rawQuery('$_accountsSql AND a.id = ?', [id]);
+    final rows = await (await _db).rawQuery(
+      '$_accountsSql AND a.id = ?',
+      [userId, userId, userId, userId, id],
+    );
+
     if (rows.isEmpty) {
       throw const AppException('La cuenta no existe.');
     }
+
     final row = rows.first;
+
     return Account(
       row['id'] as int,
       row['name'] as String,
@@ -91,6 +131,7 @@ class FinanceRepository {
     }
     final now = DateTime.now().toIso8601String();
     await (await _db).insert('transactions', {
+      'user_id': userId,
       'account_id': accountId,
       'category_id': categoryId,
       'type': type,
@@ -117,6 +158,7 @@ class FinanceRepository {
     }
     final now = DateTime.now().toIso8601String();
     await (await _db).insert('transfers', {
+      'user_id': userId,
       'source_account_id': from,
       'destination_account_id': to,
       'amount': amount,
