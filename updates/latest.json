@@ -1,21 +1,21 @@
 {
-  "version": "0.5.4",
-  "build": 14,
-  "release": "v0.5.4",
+  "version": "0.5.6",
+  "build": 16,
+  "release": "v0.5.6",
   "mandatory": false,
   "notes": [
-    "Mejoras en el sistema de autenticación.",
-    "La cuenta utilizada se recuerda en el dispositivo.",
-    "Se requiere la contraseña nuevamente al abrir Finora.",
-    "Mejoras de estabilidad."
+    "Correcciones relacionadas con la generación e instalación de los APK de Android.",
+    "Mejoras en el proceso de compilación de las versiones de producción.",
+    "Mejoras en la verificación de la firma de los APK.",
+    "Correcciones generales de estabilidad."
   ],
   "android": {
-    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.4/app-arm64-v8a-release.apk",
-    "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v0.5.4/app-armeabi-v7a-release.apk",
-    "x86_64": "https://github.com/K3NYEL/finora/releases/download/v0.5.4/app-x86_64-release.apk"
+    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_armeabi-v7a.apk",
+    "x86_64": "https://github.com/K3NYEL/finora/releases/download/v0.5.6/Finora_v0.5.6_x86_64.apk"
   },
   "linux": {
-    "version": "0.5.4",
-    "build": 14
+    "version": "0.5.6",
+    "build": 16
   }
 }
