@@ -15,7 +15,10 @@ class ReleaseInfo {
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
 
   int get build {
-    final match = RegExp(r'(?im)\\bBuild\\s*:\\s*(\\d+)').firstMatch(body);
+    final match = RegExp(
+      r'(?im)\bBuild\s*:\s*\*?\*?\s*(\d+)',
+    ).firstMatch(body);
+
     return int.tryParse(match?.group(1) ?? '') ?? 0;
   }
 }
