@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../domain/user.dart';
 import '../session_provider.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -18,10 +19,35 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  AppUser? _rememberedUser;
+
   bool _isRegistering = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  bool get _hasRememberedUser =>
+      _rememberedUser != null && !_isRegistering;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedUser();
+  }
+
+  Future<void> _loadRememberedUser() async {
+    final user =
+        await ref.read(sessionProvider.notifier).getRememberedUser();
+
+    if (!mounted) return;
+
+    if (user != null) {
+      _firstNameController.text = user.firstName;
+      _lastNameController.text = user.lastName;
+    }
+
+    setState(() => _rememberedUser = user);
+  }
 
   @override
   void dispose() {
@@ -41,9 +67,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
     if (_isRegistering && password != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Las contraseñas no coinciden.'),
-        ),
+        const SnackBar(content: Text('Las contraseñas no coinciden.')),
       );
       return;
     }
@@ -64,14 +88,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               lastName: _lastNameController.text,
               password: password,
             );
+
       await ref.read(sessionProvider.notifier).setUser(user);
 
       if (!mounted) return;
-
       context.go('/');
     } on AppException catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
@@ -88,20 +111,37 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _toggleMode() {
     setState(() {
       _isRegistering = !_isRegistering;
-
       _firstNameController.clear();
       _lastNameController.clear();
       _passwordController.clear();
       _confirmPasswordController.clear();
+    });
+
+    if (!_isRegistering && _rememberedUser != null) {
+      _firstNameController.text = _rememberedUser!.firstName;
+      _lastNameController.text = _rememberedUser!.lastName;
+    }
+  }
+
+  Future<void> _changeAccount() async {
+    if (_isLoading) return;
+
+    await ref.read(sessionProvider.notifier).forgetUser();
+
+    if (!mounted) return;
+
+    setState(() {
+      _rememberedUser = null;
+      _firstNameController.clear();
+      _lastNameController.clear();
+      _passwordController.clear();
     });
   }
 
@@ -136,14 +176,71 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   Text(
                     _isRegistering
                         ? 'Crea tu cuenta local'
-                        : 'Inicia sesión para continuar',
+                        : _hasRememberedUser
+                            ? 'Bienvenido de nuevo'
+                            : 'Inicia sesión para continuar',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 32),
-                  if (_isRegistering) ...[
+                  if (_hasRememberedUser) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor:
+                                colorScheme.primary.withValues(alpha: 0.14),
+                            child: Icon(
+                              Icons.person_rounded,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _rememberedUser!.fullName,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Cuenta guardada en este dispositivo',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PasswordField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      autofocus: true,
+                      onToggle: () => setState(
+                        () => _obscurePassword = !_obscurePassword,
+                      ),
+                      onSubmitted: (_) => _submit(),
+                    ),
+                  ] else if (_isRegistering) ...[
                     TextField(
                       controller: _firstNameController,
                       textInputAction: TextInputAction.next,
@@ -164,6 +261,37 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    _PasswordField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      onToggle: () => setState(
+                        () => _obscurePassword = !_obscurePassword,
+                      ),
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      obscureText: _obscureConfirmPassword,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Confirmar contraseña',
+                        prefixIcon: const Icon(Icons.lock_reset_outlined),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                            () => _obscureConfirmPassword =
+                                !_obscureConfirmPassword,
+                          ),
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ),
                   ] else ...[
                     TextField(
                       controller: _firstNameController,
@@ -187,61 +315,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                  ],
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    textInputAction: _isRegistering
-                        ? TextInputAction.next
-                        : TextInputAction.done,
-                    onSubmitted: (_) {
-                      if (!_isRegistering) {
-                        _submit();
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Contraseña',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
+                    _PasswordField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      onToggle: () => setState(
+                        () => _obscurePassword = !_obscurePassword,
                       ),
-                    ),
-                  ),
-                  if (_isRegistering) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _submit(),
-                      decoration: InputDecoration(
-                        labelText: 'Confirmar contraseña',
-                        prefixIcon: const Icon(Icons.lock_reset_outlined),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword;
-                            });
-                          },
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
-                        ),
-                      ),
                     ),
                   ],
                   const SizedBox(height: 24),
@@ -254,9 +334,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : Text(
                               _isRegistering
@@ -266,17 +344,69 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: _isLoading ? null : _toggleMode,
-                    child: Text(
-                      _isRegistering
-                          ? 'Ya tengo una cuenta'
-                          : 'Crear una cuenta',
+                  if (_hasRememberedUser) ...[
+                    TextButton(
+                      onPressed: _isLoading ? null : _changeAccount,
+                      child: const Text('Usar otra cuenta'),
                     ),
-                  ),
+                    TextButton(
+                      onPressed: _isLoading ? null : _toggleMode,
+                      child: const Text('Crear una cuenta nueva'),
+                    ),
+                  ] else
+                    TextButton(
+                      onPressed: _isLoading ? null : _toggleMode,
+                      child: Text(
+                        _isRegistering
+                            ? 'Ya tengo una cuenta'
+                            : 'Crear una cuenta',
+                      ),
+                    ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PasswordField extends StatelessWidget {
+  const _PasswordField({
+    required this.controller,
+    required this.obscureText,
+    required this.onToggle,
+    this.autofocus = false,
+    this.onSubmitted,
+    this.textInputAction = TextInputAction.done,
+  });
+
+  final TextEditingController controller;
+  final bool obscureText;
+  final VoidCallback onToggle;
+  final bool autofocus;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      autofocus: autofocus,
+      textInputAction: textInputAction,
+      onSubmitted: onSubmitted,
+      decoration: InputDecoration(
+        labelText: 'Contraseña',
+        prefixIcon: const Icon(Icons.lock_outline),
+        border: const OutlineInputBorder(),
+        suffixIcon: IconButton(
+          onPressed: onToggle,
+          icon: Icon(
+            obscureText
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
           ),
         ),
       ),
