@@ -1,86 +1,105 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 class UpdateService {
   const UpdateService._();
 
-  static const String _repository =
-      'https://api.github.com/repos/K3NYEL/finora/releases/latest';
+  static const String _manifestUrl =
+      'https://k3nyel.github.io/finora/updates/latest.json';
 
   static Future<UpdateInfo?> checkForUpdate() async {
-    if (kIsWeb || !Platform.isAndroid) {
+    if (kIsWeb) {
       return null;
     }
 
     try {
+      debugPrint('[FINORA UPDATE] Consultando manifest...');
+      debugPrint('[FINORA UPDATE] $_manifestUrl');
+
       final response = await http.get(
-        Uri.parse(_repository),
+        Uri.parse(_manifestUrl),
         headers: const {
-          'Accept': 'application/vnd.github+json',
+          'Accept': 'application/json',
         },
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
         debugPrint(
-          '[FINORA UPDATE] GitHub respondió ${response.statusCode}',
+          '[FINORA UPDATE] Manifest respondió ${response.statusCode}',
         );
         return null;
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-      final latestTag = data['tag_name'] as String?;
-      final releaseName = data['name'] as String?;
-      final releaseUrl = data['html_url'] as String?;
+      final latestVersion = data['version'] as String?;
+      final build = (data['build'] as num?)?.toInt();
+      final release = data['release'] as String?;
+      final mandatory = data['mandatory'] as bool? ?? false;
 
-      if (latestTag == null) {
+      if (latestVersion == null || build == null) {
+        debugPrint(
+          '[FINORA UPDATE] Manifest inválido: faltan version/build.',
+        );
         return null;
       }
 
       final packageInfo = await PackageInfo.fromPlatform();
+
       final currentVersion = packageInfo.version;
+      final currentBuild = int.tryParse(packageInfo.buildNumber) ?? 0;
 
       debugPrint(
-        '[FINORA UPDATE] Versión instalada detectada: '
-        '${packageInfo.version}+${packageInfo.buildNumber}',
+        '[FINORA UPDATE] Versión instalada: '
+        '$currentVersion+$currentBuild',
       );
 
       debugPrint(
-        '[FINORA UPDATE] Última versión de GitHub: $latestTag',
+        '[FINORA UPDATE] Última versión: '
+        '$latestVersion+$build',
       );
-      if (!_isNewerVersion(latestTag, currentVersion)) {
+
+      if (!_isNewer(
+        latestVersion,
+        build,
+        currentVersion,
+        currentBuild,
+      )) {
         debugPrint(
-          '[FINORA UPDATE] Finora está actualizada ($currentVersion)',
+          '[FINORA UPDATE] Finora está actualizada.',
         );
         return null;
       }
 
-      final assets = (data['assets'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .map(UpdateAsset.fromJson)
-          .toList();
+      debugPrint(
+        '[FINORA UPDATE] Nueva versión disponible.',
+      );
 
-      final apk = await _selectApk(assets);
+      UpdateAsset? apk;
 
-      if (apk == null) {
-        debugPrint(
-          '[FINORA UPDATE] No hay un APK compatible con este dispositivo.',
-        );
-        return null;
+      if (Platform.isAndroid) {
+        apk = await _selectApk(data['android']);
       }
+
+      final notes =
+          (data['notes'] as List<dynamic>? ?? []).whereType<String>().toList();
 
       return UpdateInfo(
         currentVersion: currentVersion,
-        latestVersion: latestTag,
-        releaseName: releaseName ?? latestTag,
-        releaseUrl: releaseUrl,
+        currentBuild: currentBuild,
+        latestVersion: latestVersion,
+        latestBuild: build,
+        releaseName: release ?? 'Finora $latestVersion',
+        releaseUrl: 'https://github.com/K3NYEL/finora/releases',
+        mandatory: mandatory,
+        notes: notes,
         apk: apk,
       );
     } catch (e, stackTrace) {
@@ -92,6 +111,10 @@ class UpdateService {
 
   static Future<bool> downloadAndInstall(UpdateInfo update) async {
     if (!Platform.isAndroid) {
+      debugPrint(
+        '[FINORA UPDATE] La instalación automática '
+        'solo está disponible en Android.',
+      );
       return false;
     }
 
@@ -99,7 +122,7 @@ class UpdateService {
 
     if (apk == null || apk.downloadUrl.isEmpty) {
       debugPrint(
-        '[FINORA UPDATE] No hay APK disponible para este dispositivo.',
+        '[FINORA UPDATE] No hay APK disponible.',
       );
       return false;
     }
@@ -135,9 +158,7 @@ class UpdateService {
         flush: true,
       );
 
-      final fileExists = await apkFile.exists();
-
-      if (!fileExists) {
+      if (!await apkFile.exists()) {
         debugPrint(
           '[FINORA UPDATE] El APK no pudo guardarse.',
         );
@@ -154,13 +175,14 @@ class UpdateService {
       );
 
       debugPrint(
-        '[FINORA UPDATE] Instalador: ${result.type} - ${result.message}',
+        '[FINORA UPDATE] Instalador: '
+        '${result.type} - ${result.message}',
       );
 
       return result.type == ResultType.done;
     } catch (e, stackTrace) {
       debugPrint(
-        '[FINORA UPDATE] Error descargando APK: $e',
+        '[FINORA UPDATE] Error instalando actualización: $e',
       );
       debugPrint('$stackTrace');
 
@@ -169,61 +191,83 @@ class UpdateService {
   }
 
   static Future<UpdateAsset?> _selectApk(
-    List<UpdateAsset> assets,
+    dynamic androidData,
   ) async {
+    if (androidData is! Map<String, dynamic>) {
+      debugPrint(
+        '[FINORA UPDATE] No existe configuración Android.',
+      );
+      return null;
+    }
+
     final deviceInfo = DeviceInfoPlugin();
     final androidInfo = await deviceInfo.androidInfo;
 
     final abis = androidInfo.supportedAbis;
 
-    debugPrint('[FINORA UPDATE] ABIs del dispositivo: $abis');
+    debugPrint(
+      '[FINORA UPDATE] ABIs del dispositivo: $abis',
+    );
 
-    String? apkName;
+    String? architecture;
 
     if (abis.contains('arm64-v8a')) {
-      apkName = 'app-arm64-v8a-release.apk';
+      architecture = 'arm64-v8a';
     } else if (abis.contains('armeabi-v7a')) {
-      apkName = 'app-armeabi-v7a-release.apk';
+      architecture = 'armeabi-v7a';
     } else if (abis.contains('x86_64')) {
-      apkName = 'app-x86_64-release.apk';
+      architecture = 'x86_64';
     }
 
-    if (apkName == null) {
+    if (architecture == null) {
       debugPrint(
         '[FINORA UPDATE] Arquitectura no compatible.',
       );
       return null;
     }
 
-    for (final asset in assets) {
-      if (asset.name == apkName) {
-        debugPrint(
-          '[FINORA UPDATE] APK seleccionado: ${asset.name}',
-        );
-        return asset;
-      }
+    final downloadUrl = androidData[architecture] as String?;
+
+    if (downloadUrl == null || downloadUrl.isEmpty) {
+      debugPrint(
+        '[FINORA UPDATE] No hay APK para $architecture.',
+      );
+      return null;
     }
 
+    final apkName = 'app-$architecture-release.apk';
+
     debugPrint(
-      '[FINORA UPDATE] No se encontró $apkName en la release.',
+      '[FINORA UPDATE] APK seleccionado: $apkName',
     );
 
-    return null;
+    return UpdateAsset(
+      name: apkName,
+      downloadUrl: downloadUrl,
+      size: 0,
+    );
   }
 
-  static bool _isNewerVersion(
-    String latestTag,
+  static bool _isNewer(
+    String latestVersion,
+    int latestBuild,
     String currentVersion,
+    int currentBuild,
   ) {
-    final latest = _parseVersion(latestTag);
+    final latest = _parseVersion(latestVersion);
     final current = _parseVersion(currentVersion);
 
     for (var i = 0; i < 3; i++) {
-      if (latest[i] > current[i]) return true;
-      if (latest[i] < current[i]) return false;
+      if (latest[i] > current[i]) {
+        return true;
+      }
+
+      if (latest[i] < current[i]) {
+        return false;
+      }
     }
 
-    return false;
+    return latestBuild > currentBuild;
   }
 
   static List<int> _parseVersion(String version) {
@@ -231,10 +275,15 @@ class UpdateService {
     final parts = clean.split('.');
 
     return List.generate(3, (index) {
-      if (index >= parts.length) return 0;
+      if (index >= parts.length) {
+        return 0;
+      }
 
       return int.tryParse(
-            parts[index].replaceAll(RegExp(r'[^0-9].*'), ''),
+            parts[index].replaceAll(
+              RegExp(r'[^0-9].*'),
+              '',
+            ),
           ) ??
           0;
     });
@@ -244,16 +293,28 @@ class UpdateService {
 class UpdateInfo {
   const UpdateInfo({
     required this.currentVersion,
+    required this.currentBuild,
     required this.latestVersion,
+    required this.latestBuild,
     required this.releaseName,
     required this.releaseUrl,
+    required this.mandatory,
+    required this.notes,
     required this.apk,
   });
 
   final String currentVersion;
+  final int currentBuild;
+
   final String latestVersion;
+  final int latestBuild;
+
   final String releaseName;
   final String? releaseUrl;
+
+  final bool mandatory;
+  final List<String> notes;
+
   final UpdateAsset? apk;
 }
 
@@ -263,14 +324,6 @@ class UpdateAsset {
     required this.downloadUrl,
     required this.size,
   });
-
-  factory UpdateAsset.fromJson(Map<String, dynamic> json) {
-    return UpdateAsset(
-      name: json['name'] as String? ?? '',
-      downloadUrl: json['browser_download_url'] as String? ?? '',
-      size: (json['size'] as num?)?.toInt() ?? 0,
-    );
-  }
 
   final String name;
   final String downloadUrl;
