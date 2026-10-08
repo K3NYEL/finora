@@ -1,0 +1,19 @@
+{
+  "version": "5.0.0",
+  "build": 2005,
+  "release": "v5.0.0",
+  "mandatory": false,
+  "notes": [
+    "Nueva versión de Finora",
+    "Mejoras de estabilidad y autenticación"
+  ],
+  "android": {
+    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v5.0.0/app-arm64-v8a-release.apk",
+    "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v5.0.0/app-armeabi-v7a-release.apk",
+    "x86_64": "https://github.com/K3NYEL/finora/releases/download/v5.0.0/app-x86_64-release.apk"
+  },
+  "linux": {
+    "version": "5.0.0",
+    "build": 2005
+  }
+}
