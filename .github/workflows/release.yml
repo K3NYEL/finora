@@ -64,9 +64,10 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          BUILD="${VERSION}+$(sed -n 's/^version: [^+]*+//p' pubspec.yaml | head -n 1)"
+          BUILD="$(grep '^version:' pubspec.yaml | sed -E 's/.*+([0-9]+).*/\1/')"
           if [ -z "$BUILD" ]; then
-            BUILD="$(grep '^version:' pubspec.yaml | sed -E 's/.*+([0-9]+).*/\1/')"
+            echo "ERROR: Could not extract build number from pubspec.yaml."
+            exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
