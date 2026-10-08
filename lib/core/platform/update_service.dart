@@ -29,12 +29,10 @@ class UpdateService {
       final latestBuild = release.build;
 
       debugPrint(
-        '[FINORA UPDATE] Versión instalada: ' +
-        currentVersion + '+' + currentBuild.toString(),
+        '[FINORA UPDATE] Versión instalada: $currentVersion+$currentBuild',
       );
       debugPrint(
-        '[FINORA UPDATE] Última release de GitHub: ' +
-        latestVersion + '+' + latestBuild.toString(),
+        '[FINORA UPDATE] Última release de GitHub: $latestVersion+$latestBuild',
       );
 
       if (!_isNewer(
@@ -68,10 +66,10 @@ class UpdateService {
     } on UpdateCheckException {
       rethrow;
     } catch (e, stackTrace) {
-      debugPrint('[FINORA UPDATE] Error inesperado: ' + e.toString());
+      debugPrint('[FINORA UPDATE] Error inesperado: $e');
       debugPrint(stackTrace.toString());
       throw UpdateCheckException(
-        'No se pudo comprobar la última release de Finora: ' + e.toString(),
+        'No se pudo comprobar la última release de Finora: $e',
       );
     }
   }
@@ -97,7 +95,7 @@ class UpdateService {
     final androidInfo = await deviceInfo.androidInfo;
     final abis = androidInfo.supportedAbis;
 
-    debugPrint('[FINORA UPDATE] ABIs del dispositivo: ' + abis.toString());
+    debugPrint('[FINORA UPDATE] ABIs del dispositivo: $abis');
 
     String? architecture;
 
@@ -123,12 +121,12 @@ class UpdateService {
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
       debugPrint(
-        '[FINORA UPDATE] GitHub Release no contiene ' + apkName,
+        '[FINORA UPDATE] GitHub Release no contiene $apkName',
       );
       return null;
     }
 
-    debugPrint('[FINORA UPDATE] APK seleccionado: ' + apkName);
+    debugPrint('[FINORA UPDATE] APK seleccionado: $apkName');
 
     return UpdateAsset(
       name: apkName,
@@ -139,7 +137,7 @@ class UpdateService {
 
   static List<String> _extractNotes(String body) {
     return body
-        .split(RegExp(r'\\r?\\n'))
+        .split(RegExp(r'\r?\n'))
         .map((line) => line.trim())
         .where((line) => line.startsWith('- '))
         .map((line) => line.substring(2).trim())
