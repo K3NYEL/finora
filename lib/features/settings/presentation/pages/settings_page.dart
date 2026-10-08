@@ -65,14 +65,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           icon: Icons.check_circle_outline_rounded,
         );
       }
+    } on UpdateCheckException catch (e) {
+      if (!mounted) return;
+
+      await _showUpdateMessage(
+        title: 'No se pudo comprobar',
+        message: e.message,
+        icon: Icons.cloud_off_outlined,
+      );
     } catch (e) {
       if (!mounted) return;
 
       await _showUpdateMessage(
         title: 'No se pudo comprobar',
-        message: 'No fue posible comprobar las actualizaciones. '
-            'Verifica tu conexión a Internet e inténtalo nuevamente.',
-        icon: Icons.cloud_off_outlined,
+        message: 'Ocurrió un error inesperado al comprobar actualizaciones.',
+        icon: Icons.error_outline_rounded,
       );
     } finally {
       if (mounted) {
