@@ -13,6 +13,7 @@ import '../features/finance/presentation/pages/transaction_form_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
 import '../features/statistics/presentation/pages/statistics_page.dart';
 import '../features/transactions/presentation/pages/transactions_page.dart';
+import '../shared/widgets/finora_skeleton.dart';
 import '../shared/widgets/update_dialog.dart';
 import 'router_refresh_notifier.dart';
 import 'shell/app_shell.dart';
@@ -34,20 +35,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       final isAuthRoute = location == '/auth';
       final isSplashRoute = location == '/splash';
+      final isPostLoginLoadingRoute = location == '/post-login-loading';
 
-      // El splash controla la inicialización de la aplicación.
       if (isSplashRoute) {
         return null;
       }
 
-      // No hay sesión: solamente puede entrar a /auth.
       if (session == null && !isAuthRoute) {
         return '/auth';
       }
 
-      // Ya hay sesión: no tiene sentido volver a /auth.
       if (session != null && isAuthRoute) {
         return '/';
+      }
+
+      if (session != null && isPostLoginLoadingRoute) {
+        return null;
       }
 
       return null;
@@ -60,6 +63,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/auth',
         builder: (_, __) => const AuthPage(),
+      ),
+      GoRoute(
+        path: '/post-login-loading',
+        builder: (_, __) => FinoraLoadingScreen(
+          onReady: () => context.go('/'),
+        ),
       ),
       ShellRoute(
         builder: (_, __, child) => AppShell(child: child),
@@ -159,8 +168,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     try {
       debugPrint('[FINORA] Iniciando aplicación...');
 
-      // La base de datos y la comprobación de actualización se realizan
-      // en paralelo para que el splash no añada tiempo innecesario.
       final results = await Future.wait<dynamic>([
         AppDatabase.instance,
         UpdateService.checkForUpdate(),
@@ -170,8 +177,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       debugPrint('[FINORA] Base de datos y actualización comprobadas.');
 
-      // Mantener el splash visible un instante para evitar un arranque
-      // prácticamente imperceptible, incluso cuando todo responde rápido.
       final remaining = _minimumSplashDuration - stopwatch.elapsed;
       if (remaining > Duration.zero) {
         await Future<void>.delayed(remaining);
@@ -181,14 +186,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (latestUpdate != null) {
         debugPrint('[FINORA] Nueva versión disponible.');
-
         await showUpdateDialog(context, latestUpdate);
       }
 
       if (!mounted) return;
 
-      // La cuenta recordada se muestra en AuthPage, pero la contraseña
-      // siempre debe volver a verificarse al abrir Finora.
       _redirectTimer = Timer(
         Duration.zero,
         () => context.go('/auth'),
@@ -199,8 +201,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (!mounted) return;
 
-      // Incluso si falla un servicio secundario, respetamos el tiempo
-      // mínimo del splash antes de continuar con el acceso.
       final remaining = _minimumSplashDuration - stopwatch.elapsed;
       if (remaining > Duration.zero) {
         await Future<void>.delayed(remaining);
