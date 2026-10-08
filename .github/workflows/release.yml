@@ -56,6 +56,20 @@ jobs:
           storeFile=${{ github.workspace }}/android/app/finora-release.jks
           EOF
 
+      - name: Validate production signing configuration
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          test -s android/app/finora-release.jks
+          test -s android/key.properties
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_PASSWORD"
+          test -n "$KEY_ALIAS"
+          echo "Production signing configuration is present."
+
       - name: Analyze
         run: flutter analyze
 
@@ -79,8 +93,10 @@ jobs:
 
       - name: Verify APK signature
         run: |
-          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose \
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose "$APK"
+          echo "APK certificate:"
+          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs "$APK"
 
       - name: Rename release artifacts
         shell: bash
