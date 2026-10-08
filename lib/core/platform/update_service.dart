@@ -115,7 +115,7 @@ class UpdateService {
         ? latestVersion.substring(1)
         : latestVersion;
 
-    final apkName = 'Finora_v${normalizedVersion}_${architecture}.apk';
+    final apkName = 'Finora_v${normalizedVersion}_$architecture.apk';
     final downloadUrl = assets[apkName];
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
