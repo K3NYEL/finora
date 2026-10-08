@@ -1,14 +1,16 @@
 {
-  "version": "0.5.3",
-  "build": 13,
-  "release": "v0.5.3",
+  "version": "0.5.4",
+  "build": 14,
+  "release": "v0.5.4",
   "mandatory": false,
   "notes": [
     "Corrección del sistema de actualización.",
-    "Mejoras de estabilidad."
+    "Mejora del inicio de sesión.",
+    "Recuerda la cuenta del dispositivo y solicita solo la contraseña.",
+    "Añadida opción para cambiar de cuenta.""
   ],
   "android": {
-    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.3/app-arm64-v8a-release.apk",
+    "arm64-v8a": "https://github.com/K3NYEL/finora/releases/download/v0.5.4/app-arm64-v8a-release.apk",
     "armeabi-v7a": "https://github.com/K3NYEL/finora/releases/download/v0.5.3/app-armeabi-v7a-release.apk",
     "x86_64": "https://github.com/K3NYEL/finora/releases/download/v0.5.3/app-x86_64-release.apk"
   },
