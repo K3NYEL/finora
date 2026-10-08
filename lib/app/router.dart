@@ -175,30 +175,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       debugPrint('[FINORA] Base de datos OK');
 
       debugPrint('[FINORA] Comprobando actualización...');
-      final update = await UpdateService.checkForUpdate();
+      final latestUpdate = await UpdateService.checkForUpdate();
       debugPrint('[FINORA] UpdateService OK');
 
       if (!mounted) return;
 
-      if (update != null) {
+      if (latestUpdate != null) {
         debugPrint(
-          '[FINORA] Nueva versión disponible: ${update.latestVersion}',
+          '[FINORA] Nueva versión disponible.',
         );
 
-        await showUpdateDialog(context, update);
+        await showUpdateDialog(context, latestUpdate);
       }
 
       if (!mounted) return;
 
-      await ref.read(sessionProvider.notifier).restore();
-
-      final user = ref.read(sessionProvider);
-
+      // La cuenta recordada se muestra en AuthPage, pero la contraseña
+      // siempre debe volver a verificarse al abrir Finora.
       _redirectTimer = Timer(
         Duration.zero,
-        () => context.go(
-          user == null ? '/auth' : '/',
-        ),
+        () => context.go('/auth'),
       );
     } catch (e, stackTrace) {
       debugPrint('[FINORA] ERROR DURANTE INICIALIZACIÓN: $e');
@@ -206,13 +202,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (!mounted) return;
 
-      final user = ref.read(sessionProvider);
-
       _redirectTimer = Timer(
         Duration.zero,
-        () => context.go(
-          user == null ? '/auth' : '/',
-        ),
+        () => context.go('/auth'),
       );
     }
   }
