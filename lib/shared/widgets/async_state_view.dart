@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'finora_skeleton.dart';
+
 class AsyncStateView extends StatelessWidget {
   final Object? error;
   final VoidCallback? onRetry;
@@ -9,8 +11,20 @@ class AsyncStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (error == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          children: [
+            SkeletonCard(height: 72),
+            SizedBox(height: 10),
+            SkeletonCard(height: 72),
+            SizedBox(height: 10),
+            SkeletonCard(height: 72),
+          ],
+        ),
+      );
     }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -23,7 +37,9 @@ class AsyncStateView extends StatelessWidget {
             if (onRetry != null) ...[
               const SizedBox(height: 12),
               OutlinedButton(
-                  onPressed: onRetry, child: const Text('Reintentar')),
+                onPressed: onRetry,
+                child: const Text('Reintentar'),
+              ),
             ],
           ],
         ),
