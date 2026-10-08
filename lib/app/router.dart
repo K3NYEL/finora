@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,7 @@ import 'router_refresh_notifier.dart';
 import 'shell/app_shell.dart';
 
 const _pageDuration = Duration(milliseconds: 320);
+const _minimumSplashDuration = Duration(milliseconds: 900);
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = RouterRefreshNotifier(ref);
@@ -35,7 +37,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = location == '/auth';
       final isSplashRoute = location == '/splash';
 
-      // El splash controla su propia restauración de sesión.
+      // El splash controla la inicialización de la aplicación.
       if (isSplashRoute) {
         return null;
       }
@@ -53,25 +55,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // ------------------------------------------------------------
-      // SPLASH
-      // ------------------------------------------------------------
       GoRoute(
         path: '/splash',
         builder: (_, __) => const SplashScreen(),
       ),
-
-      // ------------------------------------------------------------
-      // AUTENTICACIÓN
-      // ------------------------------------------------------------
       GoRoute(
         path: '/auth',
         builder: (_, __) => const AuthPage(),
       ),
-
-      // ------------------------------------------------------------
-      // APLICACIÓN PRINCIPAL
-      // ------------------------------------------------------------
       ShellRoute(
         builder: (_, __, child) => AppShell(child: child),
         routes: [
@@ -97,10 +88,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-
-      // ------------------------------------------------------------
-      // NUEVA TRANSACCIÓN
-      // ------------------------------------------------------------
       GoRoute(
         path: '/transactions/new/:kind',
         pageBuilder: (_, state) => _page(
@@ -169,21 +156,33 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _initialize() async {
-    try {
-      debugPrint('[FINORA] Iniciando base de datos...');
-      await AppDatabase.instance;
-      debugPrint('[FINORA] Base de datos OK');
+    final stopwatch = Stopwatch()..start();
 
-      debugPrint('[FINORA] Comprobando actualización...');
-      final latestUpdate = await UpdateService.checkForUpdate();
-      debugPrint('[FINORA] UpdateService OK');
+    try {
+      debugPrint('[FINORA] Iniciando aplicación...');
+
+      // La base de datos y la comprobación de actualización se realizan
+      // en paralelo para que el splash no añada tiempo innecesario.
+      final results = await Future.wait<dynamic>([
+        AppDatabase.instance,
+        UpdateService.checkForUpdate(),
+      ]);
+
+      final latestUpdate = results[1] as UpdateInfo?;
+
+      debugPrint('[FINORA] Base de datos y actualización comprobadas.');
+
+      // Mantener el splash visible un instante para evitar un arranque
+      // prácticamente imperceptible, incluso cuando todo responde rápido.
+      final remaining = _minimumSplashDuration - stopwatch.elapsed;
+      if (remaining > Duration.zero) {
+        await Future<void>.delayed(remaining);
+      }
 
       if (!mounted) return;
 
       if (latestUpdate != null) {
-        debugPrint(
-          '[FINORA] Nueva versión disponible.',
-        );
+        debugPrint('[FINORA] Nueva versión disponible.');
 
         await showUpdateDialog(context, latestUpdate);
       }
@@ -199,6 +198,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     } catch (e, stackTrace) {
       debugPrint('[FINORA] ERROR DURANTE INICIALIZACIÓN: $e');
       debugPrint('$stackTrace');
+
+      if (!mounted) return;
+
+      // Incluso si falla un servicio secundario, respetamos el tiempo
+      // mínimo del splash antes de continuar con el acceso.
+      final remaining = _minimumSplashDuration - stopwatch.elapsed;
+      if (remaining > Duration.zero) {
+        await Future<void>.delayed(remaining);
+      }
 
       if (!mounted) return;
 
@@ -235,14 +243,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 width: 88,
                 height: 88,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(
-                    alpha: 0.14,
-                  ),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(26),
                   border: Border.all(
-                    color: theme.colorScheme.primary.withValues(
-                      alpha: 0.35,
-                    ),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.35),
                   ),
                 ),
                 child: Icon(
