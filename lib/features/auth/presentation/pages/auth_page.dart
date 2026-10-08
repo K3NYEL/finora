@@ -92,7 +92,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       await ref.read(sessionProvider.notifier).setUser(user);
 
       if (!mounted) return;
-      context.go('/');
+      context.go('/post-login-loading');
     } on AppException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
