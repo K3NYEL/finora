@@ -5,6 +5,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/movement_tile.dart';
 import '../../../../shared/widgets/async_value_view.dart';
+import '../../../../shared/widgets/finora_skeleton.dart';
 import '../../../finance/presentation/providers.dart';
 
 class DashboardStat extends StatelessWidget {
@@ -76,6 +77,13 @@ class DashboardPage extends ConsumerWidget {
         AsyncValueView(
           state: summaryState,
           onRetry: () => ref.invalidate(summaryProvider),
+          loading: const Row(
+            children: [
+              Expanded(child: SkeletonCard(height: 82)),
+              SizedBox(width: 12),
+              Expanded(child: SkeletonCard(height: 82)),
+            ],
+          ),
           data: (summary) => Row(
             children: [
               Expanded(
@@ -92,6 +100,14 @@ class DashboardPage extends ConsumerWidget {
         AsyncValueView(
           state: accountsState,
           onRetry: () => ref.invalidate(accountsProvider),
+          loading: const Column(
+            children: [
+              SizedBox(height: 12),
+              SkeletonCard(height: 64),
+              SizedBox(height: 8),
+              SkeletonCard(height: 64),
+            ],
+          ),
           data: (accounts) => accounts.isEmpty
               ? const Text('Crea tu primera cuenta en la pestaña Cuentas.',
                   style: DashboardStat.muted)
@@ -112,6 +128,16 @@ class DashboardPage extends ConsumerWidget {
         AsyncValueView(
           state: movementsState,
           onRetry: () => ref.invalidate(movementsProvider),
+          loading: const Column(
+            children: [
+              SizedBox(height: 12),
+              SkeletonCard(height: 68),
+              SizedBox(height: 8),
+              SkeletonCard(height: 68),
+              SizedBox(height: 8),
+              SkeletonCard(height: 68),
+            ],
+          ),
           data: (movements) => movements.isEmpty
               ? const Text('Aún no hay movimientos.',
                   style: DashboardStat.muted)
