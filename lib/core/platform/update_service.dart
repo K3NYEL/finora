@@ -20,13 +20,21 @@ class UpdateService {
     }
 
     try {
+      final manifestUri = Uri.parse(_manifestUrl).replace(
+        queryParameters: {
+          'v': DateTime.now().millisecondsSinceEpoch.toString(),
+        },
+      );
+
       debugPrint('[FINORA UPDATE] Consultando manifest...');
-      debugPrint('[FINORA UPDATE] $_manifestUrl');
+      debugPrint('[FINORA UPDATE] $manifestUri');
 
       final response = await http.get(
-        Uri.parse(_manifestUrl),
+        manifestUri,
         headers: const {
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
       ).timeout(const Duration(seconds: 10));
 
@@ -72,15 +80,11 @@ class UpdateService {
         currentVersion,
         currentBuild,
       )) {
-        debugPrint(
-          '[FINORA UPDATE] Finora está actualizada.',
-        );
+        debugPrint('[FINORA UPDATE] Finora está actualizada.');
         return null;
       }
 
-      debugPrint(
-        '[FINORA UPDATE] Nueva versión disponible.',
-      );
+      debugPrint('[FINORA UPDATE] Nueva versión disponible.');
 
       UpdateAsset? apk;
 
@@ -121,22 +125,16 @@ class UpdateService {
     final apk = update.apk;
 
     if (apk == null || apk.downloadUrl.isEmpty) {
-      debugPrint(
-        '[FINORA UPDATE] No hay APK disponible.',
-      );
+      debugPrint('[FINORA UPDATE] No hay APK disponible.');
       return false;
     }
 
     try {
-      debugPrint(
-        '[FINORA UPDATE] Descargando ${apk.name}...',
-      );
+      debugPrint('[FINORA UPDATE] Descargando ${apk.name}...');
 
       final directory = await getTemporaryDirectory();
 
-      final apkFile = File(
-        '${directory.path}/${apk.name}',
-      );
+      final apkFile = File('${directory.path}/${apk.name}');
 
       if (await apkFile.exists()) {
         await apkFile.delete();
@@ -153,21 +151,14 @@ class UpdateService {
         return false;
       }
 
-      await apkFile.writeAsBytes(
-        response.bodyBytes,
-        flush: true,
-      );
+      await apkFile.writeAsBytes(response.bodyBytes, flush: true);
 
       if (!await apkFile.exists()) {
-        debugPrint(
-          '[FINORA UPDATE] El APK no pudo guardarse.',
-        );
+        debugPrint('[FINORA UPDATE] El APK no pudo guardarse.');
         return false;
       }
 
-      debugPrint(
-        '[FINORA UPDATE] APK descargado: ${apkFile.path}',
-      );
+      debugPrint('[FINORA UPDATE] APK descargado: ${apkFile.path}');
 
       final result = await OpenFilex.open(
         apkFile.path,
@@ -185,29 +176,21 @@ class UpdateService {
         '[FINORA UPDATE] Error instalando actualización: $e',
       );
       debugPrint('$stackTrace');
-
       return false;
     }
   }
 
-  static Future<UpdateAsset?> _selectApk(
-    dynamic androidData,
-  ) async {
+  static Future<UpdateAsset?> _selectApk(dynamic androidData) async {
     if (androidData is! Map<String, dynamic>) {
-      debugPrint(
-        '[FINORA UPDATE] No existe configuración Android.',
-      );
+      debugPrint('[FINORA UPDATE] No existe configuración Android.');
       return null;
     }
 
     final deviceInfo = DeviceInfoPlugin();
     final androidInfo = await deviceInfo.androidInfo;
-
     final abis = androidInfo.supportedAbis;
 
-    debugPrint(
-      '[FINORA UPDATE] ABIs del dispositivo: $abis',
-    );
+    debugPrint('[FINORA UPDATE] ABIs del dispositivo: $abis');
 
     String? architecture;
 
@@ -220,9 +203,7 @@ class UpdateService {
     }
 
     if (architecture == null) {
-      debugPrint(
-        '[FINORA UPDATE] Arquitectura no compatible.',
-      );
+      debugPrint('[FINORA UPDATE] Arquitectura no compatible.');
       return null;
     }
 
@@ -237,9 +218,7 @@ class UpdateService {
 
     final apkName = 'app-$architecture-release.apk';
 
-    debugPrint(
-      '[FINORA UPDATE] APK seleccionado: $apkName',
-    );
+    debugPrint('[FINORA UPDATE] APK seleccionado: $apkName');
 
     return UpdateAsset(
       name: apkName,
@@ -258,13 +237,8 @@ class UpdateService {
     final current = _parseVersion(currentVersion);
 
     for (var i = 0; i < 3; i++) {
-      if (latest[i] > current[i]) {
-        return true;
-      }
-
-      if (latest[i] < current[i]) {
-        return false;
-      }
+      if (latest[i] > current[i]) return true;
+      if (latest[i] < current[i]) return false;
     }
 
     return latestBuild > currentBuild;
@@ -275,15 +249,10 @@ class UpdateService {
     final parts = clean.split('.');
 
     return List.generate(3, (index) {
-      if (index >= parts.length) {
-        return 0;
-      }
+      if (index >= parts.length) return 0;
 
       return int.tryParse(
-            parts[index].replaceAll(
-              RegExp(r'[^0-9].*'),
-              '',
-            ),
+            parts[index].replaceAll(RegExp(r'[^0-9].*'), ''),
           ) ??
           0;
     });
@@ -305,16 +274,12 @@ class UpdateInfo {
 
   final String currentVersion;
   final int currentBuild;
-
   final String latestVersion;
   final int latestBuild;
-
   final String releaseName;
   final String? releaseUrl;
-
   final bool mandatory;
   final List<String> notes;
-
   final UpdateAsset? apk;
 }
 
