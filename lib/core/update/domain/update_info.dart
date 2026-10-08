@@ -16,7 +16,7 @@ class ReleaseInfo {
 
   int get build {
     final match = RegExp(
-      r'(?im)\bBuild\s*:\s*\*?\*?\s*(\d+)',
+      r'\bBuild\s*:\s*\*?\*?\s*(\d+)',
     ).firstMatch(body);
 
     return int.tryParse(match?.group(1) ?? '') ?? 0;
