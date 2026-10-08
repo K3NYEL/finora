@@ -134,12 +134,12 @@ class DashboardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -149,31 +149,31 @@ class DashboardSkeleton extends StatelessWidget {
                 ],
               ),
             ),
-            SkeletonBox(width: 44, height: 44, borderRadius: 14),
+            const SkeletonBox(width: 44, height: 44, borderRadius: 14),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         Row(
-          children: const [
+          children: [
             Expanded(child: SkeletonCard(height: 82)),
             SizedBox(width: 12),
             Expanded(child: SkeletonCard(height: 82)),
           ],
         ),
-        const SizedBox(height: 24),
-        const SkeletonText(width: 80),
-        const SizedBox(height: 12),
-        const SkeletonCard(height: 64),
-        const SizedBox(height: 8),
-        const SkeletonCard(height: 64),
-        const SizedBox(height: 24),
-        const SkeletonText(width: 150),
-        const SizedBox(height: 12),
-        const SkeletonCard(height: 68),
-        const SizedBox(height: 8),
-        const SkeletonCard(height: 68),
-        const SizedBox(height: 8),
-        const SkeletonCard(height: 68),
+        SizedBox(height: 24),
+        SkeletonText(width: 80),
+        SizedBox(height: 12),
+        SkeletonCard(height: 64),
+        SizedBox(height: 8),
+        SkeletonCard(height: 64),
+        SizedBox(height: 24),
+        SkeletonText(width: 150),
+        SizedBox(height: 12),
+        SkeletonCard(height: 68),
+        SizedBox(height: 8),
+        SkeletonCard(height: 68),
+        SizedBox(height: 8),
+        SkeletonCard(height: 68),
       ],
     );
   }
