@@ -64,8 +64,14 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          BUILD="${VERSION}+$(sed -n 's/^version: [^+]*+//p' pubspec.yaml | head -n 1)"
+          if [ -z "$BUILD" ]; then
+            BUILD="$(grep '^version:' pubspec.yaml | sed -E 's/.*+([0-9]+).*/\1/')"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION"
+          echo "Release build: $BUILD"
 
       - name: Build APKs
         run: flutter build apk --release --split-per-abi
@@ -101,6 +107,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body: |
+            ## Finora v${{ steps.version.outputs.version }}
+
+            **Versión:** ${{ steps.version.outputs.version }}
+            **Build:** ${{ steps.version.outputs.build }}
+
+            Esta release fue generada automáticamente por GitHub Actions.
+
           files: |
             build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_arm64-v8a.apk
             build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_armeabi-v7a.apk
