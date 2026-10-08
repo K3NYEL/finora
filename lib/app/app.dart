@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'router.dart';
 import 'settings_provider.dart';
 import 'theme/app_theme.dart';
@@ -20,7 +19,7 @@ class FinoraApp extends ConsumerWidget {
       theme: _lightTheme,
       darkTheme: _darkTheme,
       themeMode: settings.themeMode,
-      routerConfig: appRouter,
+      routerConfig: ref.watch(appRouterProvider),
       debugShowCheckedModeBanner: false,
     );
   }

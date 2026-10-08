@@ -12,46 +12,65 @@ final sessionProvider =
     NotifierProvider<SessionNotifier, AppUser?>(SessionNotifier.new);
 
 class SessionNotifier extends Notifier<AppUser?> {
-  static const _userIdKey = 'current_user_id';
+  static const _rememberedUserIdKey = 'remembered_user_id';
 
   @override
   AppUser? build() {
     return null;
   }
 
+  /// Restaura la sesión desde los datos guardados.
   Future<void> restore() async {
-    await _restoreSession();
+    final user = await getRememberedUser();
+    state = user;
   }
 
-  Future<void> _restoreSession() async {
+  /// Comprueba si existe una cuenta recordada.
+  Future<AppUser?> getRememberedUser() async {
     final preferences = await SharedPreferences.getInstance();
-    final userId = preferences.getString(_userIdKey);
+
+    final userId = preferences.getString(_rememberedUserIdKey);
 
     if (userId == null || userId.isEmpty) {
-      return;
+      return null;
     }
 
     final user = await ref.read(authRepositoryProvider).getUserById(userId);
 
-    if (user != null) {
-      state = user;
-    } else {
-      await preferences.remove(_userIdKey);
+    if (user == null) {
+      await preferences.remove(_rememberedUserIdKey);
+      return null;
     }
+
+    return user;
   }
 
-  Future<void> setUser(AppUser user) async {
+  /// Guarda qué cuenta debe aparecer en el próximo inicio.
+  Future<void> rememberUser(AppUser user) async {
     final preferences = await SharedPreferences.getInstance();
 
-    await preferences.setString(_userIdKey, user.id);
+    await preferences.setString(
+      _rememberedUserIdKey,
+      user.id,
+    );
+  }
 
+  /// Inicia la sesión actual después de verificar la contraseña.
+  Future<void> setUser(AppUser user) async {
+    await rememberUser(user);
     state = user;
   }
 
+  /// Cierra la sesión, pero conserva la cuenta recordada.
   Future<void> clearSession() async {
+    state = null;
+  }
+
+  /// Elimina completamente la cuenta recordada.
+  Future<void> forgetUser() async {
     final preferences = await SharedPreferences.getInstance();
 
-    await preferences.remove(_userIdKey);
+    await preferences.remove(_rememberedUserIdKey);
 
     state = null;
   }
