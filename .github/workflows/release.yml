@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -38,10 +37,10 @@ jobs:
 
       - name: Configure Android signing
         env:
-          KEYSTORE_BASE64: \${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "ERROR: ANDROID_KEYSTORE_BASE64 is missing."
@@ -54,14 +53,14 @@ jobs:
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
-          storeFile=\${{ github.workspace }}/android/app/finora-release.jks
+          storeFile=${{ github.workspace }}/android/app/finora-release.jks
           EOF
 
       - name: Validate production signing configuration
         env:
-          STORE_PASSWORD: \${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: \${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: \${{ secrets.ANDROID_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           test -s android/app/finora-release.jks
           test -s android/key.properties
@@ -100,19 +99,10 @@ jobs:
           echo "APK certificate:"
           $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs "$APK"
 
-      - name: Upload verification APK
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Finora-signing-verification
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          retention-days: 7
-
       - name: Rename release artifacts
-        if: github.event_name == 'push'
         shell: bash
         run: |
-          VERSION="\${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           APK_DIR="build/app/outputs/flutter-apk"
 
           mv "$APK_DIR/app-arm64-v8a-release.apk" "$APK_DIR/Finora_v$VERSION"_arm64-v8a.apk
@@ -120,10 +110,9 @@ jobs:
           mv "$APK_DIR/app-x86_64-release.apk" "$APK_DIR/Finora_v$VERSION"_x86_64.apk
 
       - name: Generate checksums
-        if: github.event_name == 'push'
         shell: bash
         run: |
-          VERSION="\${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           APK_DIR="build/app/outputs/flutter-apk"
 
           cd "$APK_DIR"
@@ -133,23 +122,22 @@ jobs:
             > "Finora_v$VERSION"_SHA256SUMS.txt
 
       - name: Create GitHub Release
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           body: |
-            ## Finora v\${{ steps.version.outputs.version }}
+            ## Finora v${{ steps.version.outputs.version }}
 
-            **Versión:** \${{ steps.version.outputs.version }}
-            **Build:** \${{ steps.version.outputs.build }}
+            **Versión:** ${{ steps.version.outputs.version }}
+            **Build:** ${{ steps.version.outputs.build }}
 
             Esta release fue generada automáticamente por GitHub Actions.
 
           files: |
-            build/app/outputs/flutter-apk/Finora_v\${{ steps.version.outputs.version }}_arm64-v8a.apk
-            build/app/outputs/flutter-apk/Finora_v\${{ steps.version.outputs.version }}_armeabi-v7a.apk
-            build/app/outputs/flutter-apk/Finora_v\${{ steps.version.outputs.version }}_x86_64.apk
-            build/app/outputs/flutter-apk/Finora_v\${{ steps.version.outputs.version }}_SHA256SUMS.txt
+            build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_arm64-v8a.apk
+            build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_armeabi-v7a.apk
+            build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_x86_64.apk
+            build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_SHA256SUMS.txt
 
       - name: Clean signing files
         if: always()
