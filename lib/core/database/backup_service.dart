@@ -116,7 +116,7 @@ class BackupService {
           (row['initial_balance_minor'] is num &&
               ((row['initial_balance_minor'] as num).toInt() < 0 ||
                   (row['initial_balance_minor'] as num).toInt() !=
-                      (row['initial_balance'] as num).round() * 100))) {
+                      ((row['initial_balance'] as num) * 100).round()))) {
         throw const AppException('La copia contiene un balance inicial inválido.');
       }
       if (!accountIds.add(row['id'] as int)) {
