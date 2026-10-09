@@ -104,6 +104,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
       if (!mounted) return;
       context.go('/post-login-loading');
+    } on FinoraApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } on AppException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
