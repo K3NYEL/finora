@@ -6,6 +6,10 @@ import 'package:go_router/go_router.dart';
 import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
+import '../../../../core/database/database.dart';
+import '../../../../core/errors/app_exception.dart';
+import '../../../../core/database/migrations/legacy_data_migration_service.dart';
+import '../../../finance/presentation/providers.dart';
 import '../../../../core/settings/app_preferences.dart';
 import '../../../../shared/widgets/update_dialog.dart';
 
@@ -121,6 +125,129 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         );
       },
     );
+  }
+
+  Future<void> _recoverLegacyData() async {
+    final user = ref.read(sessionProvider);
+    if (user == null) return;
+
+    final database = await AppDatabase.instance;
+    final migration = LegacyDataMigrationService(database);
+    final status = await migration.getStatus();
+    final accounts = (status['unassigned_accounts'] as num?)?.toInt() ?? 0;
+    final transactions =
+        (status['unassigned_transactions'] as num?)?.toInt() ?? 0;
+    final transfers = (status['unassigned_transfers'] as num?)?.toInt() ?? 0;
+    final total = accounts + transactions + transfers;
+
+    if (!mounted) return;
+    if (total == 0) {
+      await _showUpdateMessage(
+        title: 'No hay datos pendientes',
+        message: 'No se encontraron cuentas, movimientos ni transferencias '
+            'antiguas pendientes de recuperar.',
+        icon: Icons.check_circle_outline_rounded,
+      );
+      return;
+    }
+
+    final confirmationController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recuperar datos antiguos'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Finora encontró datos financieros sin propietario asignado '
+                'en esta instalación:',
+              ),
+              const SizedBox(height: 12),
+              Text('• Cuentas: $accounts'),
+              Text('• Movimientos: $transactions'),
+              Text('• Transferencias: $transfers'),
+              const SizedBox(height: 12),
+              const Text(
+                'Si continúas, las cuentas antiguas sin propietario se '
+                'asignarán a tu perfil y los movimientos compatibles se '
+                'vincularán a esas cuentas. Los registros que entren en '
+                'conflicto permanecerán sin asignar.',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No continúes si este dispositivo fue compartido y esos datos '
+                'podrían pertenecer a otra persona. Esta acción no se puede '
+                'deshacer desde la aplicación.',
+                style: TextStyle(
+                  color: Theme.of(dialogContext).colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Escribe exactamente: ${LegacyDataMigrationService.confirmationPhrase}',
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmationController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Confirmación',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Recuperar datos'),
+          ),
+        ],
+      ),
+    );
+    final confirmation = confirmationController.text;
+    confirmationController.dispose();
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await migration.adoptLegacyData(
+        userId: user.id,
+        confirmation: confirmation,
+      );
+
+      ref.invalidate(accountsProvider);
+      ref.invalidate(movementsProvider);
+      ref.invalidate(summaryProvider);
+      ref.invalidate(byCategoryProvider);
+
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Revisión completada',
+        message: 'Finora procesó los datos antiguos. Si quedaron registros '
+            'en conflicto, permanecerán sin asignar para proteger la '
+            'privacidad de las cuentas.',
+        icon: Icons.check_circle_outline_rounded,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudieron recuperar los datos',
+        message: error is AppException
+            ? error.message
+            : 'Ocurrió un error inesperado. No se confirmó la recuperación.',
+        icon: Icons.error_outline_rounded,
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -293,6 +420,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onTap: () {
                 // Próximamente.
               },
+            ),
+            _SettingsTile(
+              icon: Icons.history_rounded,
+              title: 'Recuperar datos antiguos',
+              subtitle: 'Revisar y recuperar datos sin propietario asignado',
+              onTap: _recoverLegacyData,
             ),
             _SettingsTile(
               icon: Icons.sync_outlined,

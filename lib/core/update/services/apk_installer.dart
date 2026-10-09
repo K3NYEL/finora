@@ -31,6 +31,15 @@ class ApkInstaller {
       return ApkInstallResult.failed;
     }
 
+    // Accept only HTTPS assets hosted by the official Finora GitHub release path.
+    // The Android package manager still enforces APK signing compatibility.
+    if (!_isTrustedReleaseAsset(apk)) {
+      debugPrint(
+        '[FINORA UPDATE] URL o nombre de APK no autorizado; descarga rechazada.',
+      );
+      return ApkInstallResult.failed;
+    }
+
     final client = http.Client();
     IOSink? sink;
     File? apkFile;
@@ -140,6 +149,29 @@ class ApkInstaller {
       }
       client.close();
     }
+  }
+
+  static bool _isTrustedReleaseAsset(UpdateAsset apk) {
+    final uri = Uri.tryParse(apk.downloadUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'github.com' ||
+        uri.port != 443 ||
+        uri.userInfo.isNotEmpty ||
+        uri.query.isNotEmpty ||
+        uri.fragment.isNotEmpty) {
+      return false;
+    }
+
+    final namePattern = RegExp(
+      r'^Finora_v[0-9]+\.[0-9]+\.[0-9]+_(arm64-v8a|armeabi-v7a|x86_64)\.apk$',
+    );
+    if (!namePattern.hasMatch(apk.name)) return false;
+
+    const expectedPrefix = '/K3NYEL/finora/releases/download/';
+    if (!uri.path.startsWith(expectedPrefix)) return false;
+
+    return uri.pathSegments.isNotEmpty && uri.pathSegments.last == apk.name;
   }
 
   static Future<bool> _isCompleteApk(File file) async {

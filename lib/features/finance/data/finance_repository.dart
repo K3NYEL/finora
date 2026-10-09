@@ -82,11 +82,27 @@ class FinanceRepository {
   }
 
   Future<List<Category>> categories(String type) async {
-    final rows = await (await _db)
-        .query('categories', where: 'type = ?', whereArgs: [type]);
+    final rows = await (await _db).query(
+      'categories',
+      where: '(user_id IS NULL OR user_id = ?) AND type = ?',
+      whereArgs: [userId, type],
+    );
     return [
       for (final r in rows) Category(r['id'] as int, r['name'] as String)
     ];
+  }
+
+  Future<void> _validateCategory(int id) async {
+    final rows = await (await _db).query(
+      'categories',
+      columns: ['id'],
+      where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
+      whereArgs: [id, userId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw const AppException('La categoría no existe o no está disponible.');
+    }
   }
 
   Future<Account> _account(int id) async {
@@ -125,6 +141,7 @@ class FinanceRepository {
     if (categoryId == null) {
       throw const AppException('Elige una categoría.');
     }
+    await _validateCategory(categoryId);
     final acc = await _account(accountId);
     if (type == 'expense' && acc.balance < amount) {
       throw const AppException('Saldo insuficiente en esta cuenta.');
@@ -173,16 +190,20 @@ class FinanceRepository {
     final rows = await (await _db).rawQuery('''
       SELECT t.type AS kind, COALESCE(NULLIF(t.description, ''), c.name) AS title,
              a.name AS subtitle, COALESCE(t.amount_minor / 100.0, t.amount) AS amount, t.date AS date
-      FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN categories c ON c.id = t.category_id
+      FROM transactions t
+      JOIN accounts a ON a.id = t.account_id AND a.user_id = ?
+      JOIN categories c ON c.id = t.category_id
+        AND (c.user_id IS NULL OR c.user_id = ?)
       WHERE t.user_id = ?
       UNION ALL
       SELECT 'transfer', COALESCE(NULLIF(tr.description, ''), 'Transferencia'),
              s.name || ' → ' || d.name,
              COALESCE(tr.amount_minor / 100.0, tr.amount), tr.date
-      FROM transfers tr JOIN accounts s ON s.id = tr.source_account_id
-                        JOIN accounts d ON d.id = tr.destination_account_id
+      FROM transfers tr
+      JOIN accounts s ON s.id = tr.source_account_id AND s.user_id = ?
+      JOIN accounts d ON d.id = tr.destination_account_id AND d.user_id = ?
       WHERE tr.user_id = ?
-      ORDER BY date DESC LIMIT 200''', [userId, userId]);
+      ORDER BY date DESC LIMIT 200''', [userId, userId, userId, userId, userId, userId]);
     return [
       for (final r in rows)
         Movement(
@@ -214,8 +235,10 @@ class FinanceRepository {
               SUM(COALESCE(t.amount_minor / 100.0, t.amount)) AS total
               FROM transactions t
       JOIN categories c ON c.id = t.category_id
-      WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? GROUP BY c.id ORDER BY total DESC''',
-        [userId, DateTime(n.year, n.month).toIso8601String()]);
+        AND (c.user_id IS NULL OR c.user_id = ?)
+      WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ?
+      GROUP BY c.id ORDER BY total DESC''',
+        [userId, userId, DateTime(n.year, n.month).toIso8601String()]);
     return [
       for (final r in rows)
         (r['name'] as String, (r['total'] as num).toDouble())
