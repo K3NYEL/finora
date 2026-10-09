@@ -37,7 +37,9 @@ class AuthRepository {
       salt: salt,
       iterations: _passwordHashIterations,
     );
-    return '${_passwordHashAlgorithm}\\$_passwordHashIterations\\
+    return '${_passwordHashAlgorithm}\$${_passwordHashIterations}\$'
+        '${base64UrlEncode(salt)}\$'
+        '${base64UrlEncode(hash)}';
   }
 
   Uint8List _pbkdf2({
