@@ -123,7 +123,7 @@ class AuthRepository {
   }
 
   bool _needsPasswordHashUpgrade(String storedHash) =>
-      !storedHash.startsWith('${_passwordHashAlgorithm}\\
+      !storedHash.startsWith('${_passwordHashAlgorithm}\$');
 
   String _generateUserId() => 'usr_${_uuid.v4().replaceAll('-', '')}';
 
