@@ -60,6 +60,12 @@ const loginSchema = z.object({
 
 type AuthenticatedRequest = FastifyRequest & { userId?: string };
 
+function pgErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? error.code : undefined;
+}
+
+
 async function issueAccessToken(userId: string): Promise<string> {
   return new SignJWT({ typ: 'access' })
     .setProtectedHeader({ alg: 'HS256' })
@@ -120,7 +126,7 @@ app.post('/v1/auth/register', {
       [id, firstName, lastName, loginIdentifier, normalized, passwordHash],
     );
   } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return reply.code(409).send({ error: 'account_unavailable' });
     }
     request.log.error({ err: error }, 'Account registration failed');
@@ -301,7 +307,7 @@ app.post('/v1/transactions', { preHandler: authenticate }, async (request: Authe
     );
     return reply.code(201).send(result.rows[0]);
   } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && ['23503', '23514'].includes(String(error.code))) {
+    if (['23503', '23514'].includes(pgErrorCode(error) ?? '')) {
       return reply.code(400).send({ error: 'invalid_financial_reference' });
     }
     throw error;
