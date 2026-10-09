@@ -399,7 +399,7 @@ type FinoraBackup = z.infer<typeof backupRootSchema>;
 function toPostgresTimestamp(value: string): string {
   // Legacy SQLite backups store local ISO timestamps without an offset.
   // Preserve their wall-clock value by treating offset-less values as UTC.
-  return /(?:Z|[+-]\\d{2}:\\d{2})$/.test(value) ? value : `${value}Z`;
+  return /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
 }
 
 function validateBackup(raw: string): { backup: FinoraBackup; checksum: string } {
