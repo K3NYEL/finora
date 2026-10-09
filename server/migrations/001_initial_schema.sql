@@ -175,6 +175,16 @@ CREATE TRIGGER transfers_currency_guard
 BEFORE INSERT OR UPDATE OF user_id, source_account_sync_id, destination_account_sync_id ON transfers
 FOR EACH ROW EXECUTE FUNCTION finora_check_transfer_currency();
 
+INSERT INTO categories (sync_id, user_id, name, type, is_default, is_system) VALUES
+  ('00000000-0000-4000-8000-000000000001', NULL, 'Alimentación', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000002', NULL, 'Transporte', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000003', NULL, 'Vivienda', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000004', NULL, 'Salud', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000005', NULL, 'Ocio', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000006', NULL, 'Otros gastos', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000007', NULL, 'Salario', 'income', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000008', NULL, 'Otros ingresos', 'income', TRUE, TRUE);
+
 INSERT INTO schema_migrations(version) VALUES ('001_initial_schema');
 
 COMMIT;
