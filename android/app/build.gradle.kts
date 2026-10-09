@@ -3,12 +3,20 @@ import java.util.Properties
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
-if (!keystorePropertiesFile.exists()) {
-    throw GradleException(
-        "Production signing configuration is missing: android/key.properties"
-    )
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+} else {
+    val releaseRequested = gradle.startParameter.taskNames.any { taskName ->
+        taskName.contains("release", ignoreCase = true) ||
+            taskName.equals("build", ignoreCase = true) ||
+            taskName.equals("assemble", ignoreCase = true)
+    }
+    if (releaseRequested) {
+        throw GradleException(
+            "Production signing configuration is missing: android/key.properties"
+        )
+    }
 }
-keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 
 plugins {
     id("com.android.application")
@@ -43,11 +51,13 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.create("release") {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.create("release") {
+                    keyAlias = keystoreProperties["keyAlias"] as String
+                    keyPassword = keystoreProperties["keyPassword"] as String
+                    storeFile = file(keystoreProperties["storeFile"] as String)
+                    storePassword = keystoreProperties["storePassword"] as String
+                }
             }
         }
     }
