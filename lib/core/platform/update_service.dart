@@ -73,7 +73,11 @@ class UpdateService {
     }
   }
 
-  static Future<bool> downloadAndInstall(UpdateInfo update) async {
+  static Future<bool> downloadAndInstall(
+    UpdateInfo update, {
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+    VoidCallback? onOpeningInstaller,
+  }) async {
     final apk = update.apk;
 
     if (apk == null || apk.downloadUrl.isEmpty) {
@@ -83,7 +87,11 @@ class UpdateService {
       return false;
     }
 
-    return ApkInstaller.downloadAndInstall(apk);
+    return ApkInstaller.downloadAndInstall(
+      apk,
+      onProgress: onProgress,
+      onOpeningInstaller: onOpeningInstaller,
+    );
   }
 
   static Future<UpdateAsset?> _selectApk(
