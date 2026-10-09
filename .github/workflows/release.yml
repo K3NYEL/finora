@@ -6,12 +6,14 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-android:
     name: Build and verify Android APKs
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     # Configure required reviewers for this environment in GitHub Settings.
     environment:
       name: production-release
