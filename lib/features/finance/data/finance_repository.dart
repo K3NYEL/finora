@@ -82,8 +82,11 @@ class FinanceRepository {
   }
 
   Future<List<Category>> categories(String type) async {
-    final rows = await (await _db)
-        .query('categories', where: 'type = ?', whereArgs: [type]);
+    final rows = await (await _db).query(
+      'categories',
+      where: '(user_id IS NULL OR user_id = ?) AND type = ?',
+      whereArgs: [userId, type],
+    );
     return [
       for (final r in rows) Category(r['id'] as int, r['name'] as String)
     ];
