@@ -167,8 +167,8 @@ void main() {
       }),
     );
 
-    await expectLater(
-      client.importBackup(
+    expect(
+      () => client.importBackup(
         accessToken: 'test-access-token',
         backupJson: '{"format":"finora-backup"}',
         currencyCode: 'DOP',
