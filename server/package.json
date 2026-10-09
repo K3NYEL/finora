@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
@@ -15,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/cors": "^10.0.2",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "argon2": "^0.41.1",
