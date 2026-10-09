@@ -10,8 +10,11 @@ permissions:
 
 jobs:
   build-android:
-    name: Build Android APK
+    name: Build and verify Android APKs
     runs-on: ubuntu-latest
+    # Configure required reviewers for this environment in GitHub Settings.
+    environment:
+      name: production-release
 
     steps:
       - name: Checkout
@@ -29,8 +32,23 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install Android Build Tools
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "build-tools;36.0.0"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+
       - name: Flutter version
-        run: flutter --version
+        run: |
+          flutter --version
+          java -version
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" version
 
       - name: Install dependencies
         run: flutter pub get
@@ -41,13 +59,16 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        shell: bash
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "ERROR: ANDROID_KEYSTORE_BASE64 is missing."
-            exit 1
-          fi
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "ERROR: ANDROID_KEYSTORE_BASE64 is missing."; exit 1; }
+          test -n "$STORE_PASSWORD" || { echo "ERROR: ANDROID_KEYSTORE_PASSWORD is missing."; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "ERROR: ANDROID_KEY_PASSWORD is missing."; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "ERROR: ANDROID_KEY_ALIAS is missing."; exit 1; }
 
           echo "$KEYSTORE_BASE64" | base64 --decode > android/app/finora-release.jks
+          test -s android/app/finora-release.jks
 
           cat > android/key.properties <<EOF
           storePassword=$STORE_PASSWORD
@@ -56,29 +77,17 @@ jobs:
           storeFile=${{ github.workspace }}/android/app/finora-release.jks
           EOF
 
-      - name: Validate production signing configuration
-        env:
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          test -s android/app/finora-release.jks
-          test -s android/key.properties
-          test -n "$STORE_PASSWORD"
-          test -n "$KEY_PASSWORD"
-          test -n "$KEY_ALIAS"
-          echo "Production signing configuration is present."
-
       - name: Analyze
         run: flutter analyze
 
       - name: Run tests
         run: flutter test
 
-      - name: Extract release version
+      - name: Extract and validate release version
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
           BUILD="$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+\+([0-9]+).*/\1/')"
 
@@ -90,7 +99,6 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           if [ "$TAG_VERSION" != "$VERSION" ]; then
             echo "ERROR: Git tag v$TAG_VERSION does not match pubspec.yaml version $VERSION."
-            echo "Update pubspec.yaml or push a tag that matches the app version."
             exit 1
           fi
 
@@ -99,39 +107,85 @@ jobs:
           echo "Release version: $VERSION"
           echo "Release build: $BUILD"
 
-      - name: Build APKs
+      - name: Build split release APKs
         run: flutter build apk --release --split-per-abi
 
-      - name: Verify APK signature
+      - name: Verify all APKs and compare signing certificate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          APK="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
-          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose "$APK"
-          echo "APK certificate:"
-          $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs "$APK"
+          set -euo pipefail
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          APK_DIR="build/app/outputs/flutter-apk"
+
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            APK="$APK_DIR/app-$ABI-release.apk"
+            test -s "$APK"
+            "$APKSIGNER" verify --verbose "$APK"
+            echo "Verified signature: $APK"
+          done
+
+          # Compare against the most recent published release to prevent signing-key changes.
+          curl --fail --silent --show-error \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" \
+            -o /tmp/finora-latest-release.json
+
+          PREVIOUS_APK_URL="$(python3 -c 'import json; d=json.load(open("/tmp/finora-latest-release.json")); print(next((a["browser_download_url"] for a in d.get("assets", []) if a["name"].endswith("_arm64-v8a.apk")), ""))')"
+          if [ -z "$PREVIOUS_APK_URL" ]; then
+            echo "ERROR: Could not find the previous published ARM64 APK to verify signing continuity."
+            exit 1
+          fi
+
+          curl --fail --location --silent --show-error "$PREVIOUS_APK_URL" -o /tmp/finora-previous-arm64.apk
+          "$APKSIGNER" verify --verbose /tmp/finora-previous-arm64.apk
+
+          CURRENT_CERT="$("$APKSIGNER" verify --print-certs "$APK_DIR/app-arm64-v8a-release.apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
+          PREVIOUS_CERT="$("$APKSIGNER" verify --print-certs /tmp/finora-previous-arm64.apk | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1)"
+
+          if [ -z "$CURRENT_CERT" ] || [ -z "$PREVIOUS_CERT" ]; then
+            echo "ERROR: Could not extract signing certificate SHA-256 digests."
+            exit 1
+          fi
+          if [ "$CURRENT_CERT" != "$PREVIOUS_CERT" ]; then
+            echo "ERROR: Current APK signing certificate differs from the previous release."
+            echo "Refusing to publish APKs signed with a different key."
+            exit 1
+          fi
+          echo "Signing certificate matches the previous published release."
 
       - name: Rename release artifacts
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          set -euo pipefail
           APK_DIR="build/app/outputs/flutter-apk"
+          mv "$APK_DIR/app-arm64-v8a-release.apk" "$APK_DIR/Finora_v${VERSION}_arm64-v8a.apk"
+          mv "$APK_DIR/app-armeabi-v7a-release.apk" "$APK_DIR/Finora_v${VERSION}_armeabi-v7a.apk"
+          mv "$APK_DIR/app-x86_64-release.apk" "$APK_DIR/Finora_v${VERSION}_x86_64.apk"
 
-          mv "$APK_DIR/app-arm64-v8a-release.apk" "$APK_DIR/Finora_v$VERSION"_arm64-v8a.apk
-          mv "$APK_DIR/app-armeabi-v7a-release.apk" "$APK_DIR/Finora_v$VERSION"_armeabi-v7a.apk
-          mv "$APK_DIR/app-x86_64-release.apk" "$APK_DIR/Finora_v$VERSION"_x86_64.apk
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            test -s "$APK_DIR/Finora_v${VERSION}_${ABI}.apk"
+          done
 
-      - name: Generate checksums
+      - name: Generate and verify SHA-256 checksums
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          set -euo pipefail
           APK_DIR="build/app/outputs/flutter-apk"
-
           cd "$APK_DIR"
-          sha256sum "Finora_v$VERSION"_arm64-v8a.apk \
-                    "Finora_v$VERSION"_armeabi-v7a.apk \
-                    "Finora_v$VERSION"_x86_64.apk \
-            > "Finora_v$VERSION"_SHA256SUMS.txt
+          sha256sum "Finora_v${VERSION}"_arm64-v8a.apk \
+                    "Finora_v${VERSION}"_armeabi-v7a.apk \
+                    "Finora_v${VERSION}"_x86_64.apk \
+            > "Finora_v${VERSION}_SHA256SUMS.txt"
+          sha256sum --check "Finora_v${VERSION}_SHA256SUMS.txt"
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -142,7 +196,7 @@ jobs:
             **Build:** ${{ steps.version.outputs.build }}
 
             Esta release fue generada automáticamente por GitHub Actions.
-
+            Las APK se verifican antes de publicar y se incluyen sumas SHA-256.
           files: |
             build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_arm64-v8a.apk
             build/app/outputs/flutter-apk/Finora_v${{ steps.version.outputs.version }}_armeabi-v7a.apk
