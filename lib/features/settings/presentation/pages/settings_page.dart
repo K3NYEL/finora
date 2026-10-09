@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -7,6 +12,7 @@ import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
 import '../../../../core/database/database.dart';
+import '../../../../core/database/backup_service.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/database/migrations/legacy_data_migration_service.dart';
 import '../../../finance/presentation/providers.dart';
@@ -22,6 +28,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _checkingForUpdate = false;
+  bool _dataOperationInProgress = false;
   String? _currentVersion;
 
   @override
@@ -124,6 +131,166 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ],
         );
       },
+    );
+  }
+
+
+  Future<void> _backupData() async {
+    if (_dataOperationInProgress) return;
+    final user = ref.read(sessionProvider);
+    if (user == null) {
+      await _showUpdateMessage(
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para crear una copia de tus datos.',
+        icon: Icons.lock_outline_rounded,
+      );
+      return;
+    }
+
+    setState(() => _dataOperationInProgress = true);
+    try {
+      final jsonText = await const BackupService().createBackup(user.id);
+      final now = DateTime.now();
+      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Guardar copia de seguridad de Finora',
+        fileName: 'finora-backup-$stamp.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: Uint8List.fromList(utf8.encode(jsonText)),
+      );
+
+      if (!mounted) return;
+      if (savedPath != null || kIsWeb) {
+        await _showUpdateMessage(
+          title: 'Copia preparada',
+          message: 'La copia de seguridad se generó correctamente. Guárdala '
+              'en un lugar privado. No contiene contraseñas ni hashes de acceso.',
+          icon: Icons.check_circle_outline_rounded,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo crear la copia',
+        message: error is AppException
+            ? error.message
+            : 'Ocurrió un error al generar o guardar la copia de seguridad.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      if (mounted) setState(() => _dataOperationInProgress = false);
+    }
+  }
+
+  Future<void> _restoreData() async {
+    if (_dataOperationInProgress) return;
+    final user = ref.read(sessionProvider);
+    if (user == null) {
+      await _showUpdateMessage(
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para restaurar una copia.',
+        icon: Icons.lock_outline_rounded,
+      );
+      return;
+    }
+
+    setState(() => _dataOperationInProgress = true);
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Seleccionar copia de seguridad de Finora',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+        allowMultiple: false,
+      );
+      if (!mounted || picked == null) return;
+      final file = picked.files.single;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        throw const AppException('No se pudo leer el archivo seleccionado.');
+      }
+      if (bytes.length > 10 * 1024 * 1024) {
+        throw const AppException('La copia supera el límite de 10 MB.');
+      }
+      final jsonText = utf8.decode(bytes, allowMalformed: false);
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Restaurar copia de seguridad'),
+          content: Text(
+            'Se importarán los datos de "${file.name}" a la cuenta actual. '
+            'Los datos existentes no se borrarán; las cuentas y movimientos '
+            'se agregarán a los que ya tienes. La misma copia no puede '
+            'restaurarse dos veces en esta cuenta.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Restaurar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      final counts = await const BackupService().restoreBackup(
+        userId: user.id,
+        jsonText: jsonText,
+      );
+      ref.invalidate(accountsProvider);
+      ref.invalidate(movementsProvider);
+      ref.invalidate(summaryProvider);
+      ref.invalidate(byCategoryProvider);
+
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Restauración completada',
+        message: 'Se importaron ${counts['accounts']} cuentas, '
+            '${counts['transactions']} movimientos y '
+            '${counts['transfers']} transferencias. '
+            'Tus datos anteriores se conservaron.',
+        icon: Icons.check_circle_outline_rounded,
+      );
+    } on AppException catch (error) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo restaurar',
+        message: error.message,
+        icon: Icons.error_outline_rounded,
+      );
+    } on FormatException {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Archivo no válido',
+        message: 'El archivo no contiene texto UTF-8 válido.',
+        icon: Icons.error_outline_rounded,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo restaurar',
+        message: 'Ocurrió un error. No se completó la importación.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      if (mounted) setState(() => _dataOperationInProgress = false);
+    }
+  }
+
+  Future<void> _showSyncInfo() async {
+    await _showUpdateMessage(
+      title: 'Sincronización en la nube',
+      message: 'La sincronización todavía no está disponible porque Finora '
+          'no tiene un backend de sincronización configurado. Tus datos '
+          'siguen guardándose localmente. Mientras tanto, usa Copia de '
+          'seguridad para moverlos manualmente entre dispositivos.',
+      icon: Icons.cloud_off_outlined,
     );
   }
 
@@ -408,18 +575,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.backup_outlined,
               title: 'Copia de seguridad',
-              subtitle: 'Guardar una copia de tus datos',
-              onTap: () {
-                // Próximamente.
-              },
+              subtitle: _dataOperationInProgress
+                  ? 'Preparando operación...'
+                  : 'Exportar cuentas y movimientos a un archivo JSON',
+              onTap: _dataOperationInProgress ? null : _backupData,
             ),
             _SettingsTile(
               icon: Icons.restore_outlined,
               title: 'Restaurar datos',
-              subtitle: 'Restaurar una copia existente',
-              onTap: () {
-                // Próximamente.
-              },
+              subtitle: _dataOperationInProgress
+                  ? 'Preparando operación...'
+                  : 'Importar una copia JSON sin borrar los datos actuales',
+              onTap: _dataOperationInProgress ? null : _restoreData,
             ),
             _SettingsTile(
               icon: Icons.history_rounded,
@@ -430,10 +597,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.sync_outlined,
               title: 'Sincronización',
-              subtitle: 'Sincronización con la nube',
-              onTap: () {
-                // Próximamente: Supabase.
-              },
+              subtitle: 'Consultar el estado de la sincronización',
+              onTap: _showSyncInfo,
             ),
           ],
         ),
