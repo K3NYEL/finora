@@ -174,12 +174,14 @@ class FinanceRepository {
       SELECT t.type AS kind, COALESCE(NULLIF(t.description, ''), c.name) AS title,
              a.name AS subtitle, COALESCE(t.amount_minor / 100.0, t.amount) AS amount, t.date AS date
       FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN categories c ON c.id = t.category_id
+      WHERE t.user_id = ?
       UNION ALL
       SELECT 'transfer', COALESCE(NULLIF(tr.description, ''), 'Transferencia'),
              s.name || ' → ' || d.name,
              COALESCE(tr.amount_minor / 100.0, tr.amount), tr.date
       FROM transfers tr JOIN accounts s ON s.id = tr.source_account_id
                         JOIN accounts d ON d.id = tr.destination_account_id
+      WHERE tr.user_id = ?
       ORDER BY date DESC LIMIT 200''');
     return [
       for (final r in rows)
@@ -199,8 +201,8 @@ class FinanceRepository {
               THEN COALESCE(amount_minor / 100.0, amount) END), 0) AS i,
               COALESCE(SUM(CASE WHEN type='expense'
               THEN COALESCE(amount_minor / 100.0, amount) END), 0) AS e
-      FROM transactions WHERE date >= ?''',
-        [DateTime(n.year, n.month).toIso8601String()]);
+      FROM transactions WHERE user_id = ? AND date >= ?''',
+        [userId, DateTime(n.year, n.month).toIso8601String()]);
     return Summary(
         (r.first['i'] as num).toDouble(), (r.first['e'] as num).toDouble());
   }
@@ -212,8 +214,8 @@ class FinanceRepository {
               SUM(COALESCE(t.amount_minor / 100.0, t.amount)) AS total
               FROM transactions t
       JOIN categories c ON c.id = t.category_id
-      WHERE t.type = 'expense' AND t.date >= ? GROUP BY c.id ORDER BY total DESC''',
-        [DateTime(n.year, n.month).toIso8601String()]);
+      WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? GROUP BY c.id ORDER BY total DESC''',
+        [userId, DateTime(n.year, n.month).toIso8601String()]);
     return [
       for (final r in rows)
         (r['name'] as String, (r['total'] as num).toDouble())
