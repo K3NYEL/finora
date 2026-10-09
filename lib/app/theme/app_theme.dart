@@ -16,9 +16,9 @@ ThemeData buildAppTheme(Brightness brightness) {
           : const ColorScheme.light())
       .copyWith(
     primary: primary,
-    onPrimary: Colors.white,
+    onPrimary: isDark ? const Color(0xFF082F49) : Colors.white,
     secondary: isDark ? const Color(0xFF7DD3FC) : const Color(0xFF0E7490),
-    onSecondary: Colors.white,
+    onSecondary: isDark ? const Color(0xFF082F49) : Colors.white,
     surface: surface,
     onSurface: text,
     onSurfaceVariant: muted,
