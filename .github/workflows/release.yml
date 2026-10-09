@@ -40,7 +40,7 @@ jobs:
             SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           fi
           test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses >/dev/null
+          # sdkmanager may close the pipe after accepting all licenses; avoid failing on yes SIGPIPE.\n          set +o pipefail\n          yes | "$SDKMANAGER" --licenses >/dev/null\n          set -o pipefail
           "$SDKMANAGER" --install "build-tools;36.0.0"
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
