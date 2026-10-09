@@ -127,7 +127,7 @@ void main() {
         captured = request;
         return http.Response(
           jsonEncode({
-            'checksum': 'a' * 64,
+            'checksum': List.filled(64, 'a').join(),
             'alreadyImported': false,
             'currencyCode': 'DOP',
             'counts': {
