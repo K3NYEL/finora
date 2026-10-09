@@ -31,6 +31,15 @@ class ApkInstaller {
       return ApkInstallResult.failed;
     }
 
+    // Accept only HTTPS assets hosted by the official Finora GitHub release path.
+    // The Android package manager still enforces APK signing compatibility.
+    if (!_isTrustedReleaseAsset(apk)) {
+      debugPrint(
+        '[FINORA UPDATE] URL o nombre de APK no autorizado; descarga rechazada.',
+      );
+      return ApkInstallResult.failed;
+    }
+
     final client = http.Client();
     IOSink? sink;
     File? apkFile;
@@ -140,6 +149,80 @@ class ApkInstaller {
       }
       client.close();
     }
+  }
+
+  static bool _isTrustedReleaseAsset(UpdateAsset apk) {
+    final uri = Uri.tryParse(apk.downloadUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'github.com' ||
+        (uri.port != 443) ||
+        uri.userInfo.isNotEmpty ||
+        uri.query.isNotEmpty ||
+        uri.fragment.isNotEmpty) {
+      return false;
+    }
+
+    final namePattern = RegExp(
+      r'^Finora_v[0-9]+\\.[0-9]+\\.[0-9]+_(arm64-v8a|armeabi-v7a|x86_64)\\.apk
+    try {
+      if (!await file.exists()) return false;
+
+      final length = await file.length();
+      // An APK is a ZIP archive. Check its local-file header and end record
+      // to avoid reusing a leftover partial download.
+      if (length < 22) return false;
+
+      final handle = await file.open();
+      try {
+        final header = await handle.read(4);
+        if (header.length != 4 ||
+            header[0] != 0x50 ||
+            header[1] != 0x4b ||
+            header[2] != 0x03 ||
+            header[3] != 0x04) {
+          return false;
+        }
+
+        final tailLength = length < 65557 ? length : 65557;
+        await handle.setPosition(length - tailLength);
+        final tail = await handle.read(tailLength);
+        for (var i = 0; i <= tail.length - 4; i++) {
+          if (tail[i] == 0x50 &&
+              tail[i + 1] == 0x4b &&
+              tail[i + 2] == 0x05 &&
+              tail[i + 3] == 0x06) {
+            return true;
+          }
+        }
+        return false;
+      } finally {
+        await handle.close();
+      }
+    } catch (e) {
+      debugPrint('[FINORA UPDATE] No se pudo validar APK en caché: $e');
+      return false;
+    }
+  }
+
+  static Future<void> _deleteIfExists(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint('[FINORA UPDATE] No se pudo limpiar ${file.path}: $e');
+    }
+  }
+},
+    );
+    if (!namePattern.hasMatch(apk.name)) return false;
+
+    final expectedPrefix = '/K3NYEL/finora/releases/download/';
+    if (!uri.path.startsWith(expectedPrefix)) return false;
+
+    final finalPathSegment = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
+    return finalPathSegment == apk.name;
   }
 
   static Future<bool> _isCompleteApk(File file) async {
