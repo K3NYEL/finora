@@ -12,6 +12,9 @@ jobs:
   build-android:
     name: Build and verify Android APKs
     runs-on: ubuntu-latest
+    # Configure required reviewers for this environment in GitHub Settings.
+    environment:
+      name: production-release
 
     steps:
       - name: Checkout
