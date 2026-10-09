@@ -9,6 +9,7 @@ import '../update/domain/update_info.dart';
 import '../update/services/apk_installer.dart';
 
 export '../update/domain/update_info.dart';
+export '../update/services/apk_installer.dart' show ApkInstallResult;
 
 class UpdateService {
   const UpdateService._();
@@ -73,7 +74,7 @@ class UpdateService {
     }
   }
 
-  static Future<bool> downloadAndInstall(
+  static Future<ApkInstallResult> downloadAndInstall(
     UpdateInfo update, {
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     VoidCallback? onOpeningInstaller,
@@ -84,7 +85,7 @@ class UpdateService {
       debugPrint(
         '[FINORA UPDATE] No hay APK disponible para este dispositivo.',
       );
-      return false;
+      return ApkInstallResult.failed;
     }
 
     return ApkInstaller.downloadAndInstall(
@@ -123,7 +124,7 @@ class UpdateService {
         ? latestVersion.substring(1)
         : latestVersion;
 
-    final apkName = 'Finora_v${normalizedVersion}_$architecture.apk';
+    final apkName = 'Finora_v${normalizedVersion}_${architecture}.apk';
     final downloadUrl = assets[apkName];
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
