@@ -129,14 +129,37 @@ jobs:
             echo "Verified signature: $APK"
           done
 
-          # Compare against the most recent published release to prevent signing-key changes.
+          # Find the newest earlier published release that has an ARM64 APK.
+          # /releases/latest can point to the current, still-empty release while this job runs.
           curl --fail --silent --show-error \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" \
-            -o /tmp/finora-latest-release.json
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            -o /tmp/finora-releases.json
 
-          PREVIOUS_APK_URL="$(python3 -c 'import json; d=json.load(open("/tmp/finora-latest-release.json")); print(next((a["browser_download_url"] for a in d.get("assets", []) if a["name"].endswith("_arm64-v8a.apk")), ""))')"
+          PREVIOUS_APK_URL="$(python3 - "$GITHUB_REF_NAME" <<'PY'
+          import json
+          import sys
+
+          current_tag = sys.argv[1]
+          with open("/tmp/finora-releases.json", encoding="utf-8") as f:
+              releases = json.load(f)
+
+          previous_url = ""
+          for release in releases:
+              if release.get("draft") or release.get("tag_name") == current_tag:
+                  continue
+              for asset in release.get("assets", []):
+                  if asset.get("name", "").endswith("_arm64-v8a.apk"):
+                      previous_url = asset.get("browser_download_url", "")
+                      if previous_url:
+                          break
+              if previous_url:
+                  break
+
+          print(previous_url)
+          PY
+          )"
           if [ -z "$PREVIOUS_APK_URL" ]; then
             echo "ERROR: Could not find the previous published ARM64 APK to verify signing continuity."
             exit 1
