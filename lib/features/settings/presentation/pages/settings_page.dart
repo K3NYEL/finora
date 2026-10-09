@@ -7,6 +7,7 @@ import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
 import '../../../../core/database/database.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/database/migrations/legacy_data_migration_service.dart';
 import '../../../finance/presentation/providers.dart';
 import '../../../../core/settings/app_preferences.dart';
@@ -242,8 +243,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudieron recuperar los datos',
-        message: error is Exception
-            ? error.toString()
+        message: error is AppException
+            ? error.message
             : 'Ocurrió un error inesperado. No se confirmó la recuperación.',
         icon: Icons.error_outline_rounded,
       );
