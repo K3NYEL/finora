@@ -1,16 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../domain/update_info.dart';
 
+enum ApkInstallResult {
+  opened,
+  permissionRequired,
+  failed,
+}
+
 class ApkInstaller {
   const ApkInstaller._();
 
-  static Future<bool> downloadAndInstall(
+  static const MethodChannel _installerChannel =
+      MethodChannel('com.finora.app/apk_installer');
+
+  static Future<ApkInstallResult> downloadAndInstall(
     UpdateAsset apk, {
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     VoidCallback? onOpeningInstaller,
@@ -19,7 +28,7 @@ class ApkInstaller {
       debugPrint(
         '[FINORA UPDATE] La instalación automática solo está disponible en Android.',
       );
-      return false;
+      return ApkInstallResult.failed;
     }
 
     final client = http.Client();
@@ -45,7 +54,7 @@ class ApkInstaller {
           '[FINORA UPDATE] Error HTTP ${response.statusCode} al descargar APK.',
         );
         await response.stream.drain<void>();
-        return false;
+        return ApkInstallResult.failed;
       }
 
       final contentLength = response.contentLength;
@@ -70,7 +79,7 @@ class ApkInstaller {
 
       if (!await apkFile.exists() || receivedBytes == 0) {
         debugPrint('[FINORA UPDATE] El APK no pudo guardarse o está vacío.');
-        return false;
+        return ApkInstallResult.failed;
       }
 
       if (totalBytes != null && receivedBytes != totalBytes) {
@@ -78,7 +87,7 @@ class ApkInstaller {
           '[FINORA UPDATE] Descarga incompleta: $receivedBytes de $totalBytes bytes.',
         );
         await apkFile.delete();
-        return false;
+        return ApkInstallResult.failed;
       }
 
       debugPrint(
@@ -87,22 +96,20 @@ class ApkInstaller {
 
       onOpeningInstaller?.call();
 
-      final result = await OpenFilex.open(
-        apkFile.path,
-        type: 'application/vnd.android.package-archive',
+      final installerResult = await _installerChannel.invokeMethod<String>(
+        'installApk',
+        {'path': apkFile.path},
       );
 
-      debugPrint(
-        '[FINORA UPDATE] Instalador: ${result.type} - ${result.message}',
-      );
-
-      // Esto confirma que se abrió el manejador, no que el usuario completó
-      // la instalación desde Android.
-      return result.type == ResultType.done;
+      if (installerResult == 'opened') return ApkInstallResult.opened;
+      if (installerResult == 'permission_required') {
+        return ApkInstallResult.permissionRequired;
+      }
+      return ApkInstallResult.failed;
     } catch (e, stackTrace) {
       debugPrint('[FINORA UPDATE] Error instalando actualización: $e');
       debugPrint('$stackTrace');
-      return false;
+      return ApkInstallResult.failed;
     } finally {
       if (sink != null) {
         await sink.close();
