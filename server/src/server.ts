@@ -186,6 +186,166 @@ app.get('/v1/me', { preHandler: authenticate }, async (request: AuthenticatedReq
   };
 });
 
+
+const accountSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  type: z.string().trim().min(1).max(40),
+  initialBalanceMinor: z.number().int().safe().nonnegative(),
+  currencyCode: z.string().regex(/^[A-Za-z]{3}$/).transform((value) => value.toUpperCase()),
+}).strict();
+
+const categorySchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  type: z.enum(['income', 'expense']),
+}).strict();
+
+const transactionSchema = z.object({
+  accountSyncId: z.string().uuid(),
+  categorySyncId: z.string().uuid(),
+  type: z.enum(['income', 'expense']),
+  amountMinor: z.number().int().safe().positive(),
+  description: z.string().max(2000).optional().default(''),
+  occurredAt: z.string().datetime({ offset: true }),
+}).strict();
+
+const transferSchema = z.object({
+  sourceAccountSyncId: z.string().uuid(),
+  destinationAccountSyncId: z.string().uuid(),
+  amountMinor: z.number().int().safe().positive(),
+  description: z.string().max(2000).optional().default(''),
+  occurredAt: z.string().datetime({ offset: true }),
+}).strict();
+
+app.get('/v1/accounts', { preHandler: authenticate }, async (request: AuthenticatedRequest) => {
+  const result = await pool.query(
+    `SELECT sync_id AS "syncId", name, type, initial_balance_minor AS "initialBalanceMinor",
+            currency_code AS "currencyCode", is_archived AS "isArchived",
+            created_at AS "createdAt", updated_at AS "updatedAt", version
+     FROM accounts WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at, sync_id`,
+    [request.userId],
+  );
+  return { accounts: result.rows };
+});
+
+app.post('/v1/accounts', { preHandler: authenticate }, async (request: AuthenticatedRequest, reply) => {
+  const parsed = accountSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+  const account = parsed.data;
+  const result = await pool.query(
+    `INSERT INTO accounts (sync_id, user_id, name, type, initial_balance_minor, currency_code)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING sync_id AS "syncId", name, type, initial_balance_minor AS "initialBalanceMinor",
+               currency_code AS "currencyCode", is_archived AS "isArchived",
+               created_at AS "createdAt", updated_at AS "updatedAt", version`,
+    [randomUUID(), request.userId, account.name, account.type, account.initialBalanceMinor, account.currencyCode],
+  );
+  return reply.code(201).send(result.rows[0]);
+});
+
+app.get('/v1/categories', { preHandler: authenticate }, async (request: AuthenticatedRequest) => {
+  const querySchema = z.object({ type: z.enum(['income', 'expense']).optional() }).strict();
+  const parsed = querySchema.safeParse(request.query);
+  if (!parsed.success) return { categories: [] };
+  const result = await pool.query(
+    `SELECT sync_id AS "syncId", name, type, is_default AS "isDefault", is_system AS "isSystem"
+     FROM categories
+     WHERE (user_id = $1 OR is_system = TRUE) AND deleted_at IS NULL
+       AND ($2::text IS NULL OR type = $2)
+     ORDER BY is_system DESC, name`,
+    [request.userId, parsed.data.type ?? null],
+  );
+  return { categories: result.rows };
+});
+
+app.post('/v1/categories', { preHandler: authenticate }, async (request: AuthenticatedRequest, reply) => {
+  const parsed = categorySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+  const result = await pool.query(
+    `INSERT INTO categories (sync_id, user_id, name, type)
+     VALUES ($1, $2, $3, $4)
+     RETURNING sync_id AS "syncId", name, type, is_default AS "isDefault", is_system AS "isSystem"`,
+    [randomUUID(), request.userId, parsed.data.name, parsed.data.type],
+  );
+  return reply.code(201).send(result.rows[0]);
+});
+
+app.get('/v1/transactions', { preHandler: authenticate }, async (request: AuthenticatedRequest) => {
+  const result = await pool.query(
+    `SELECT t.sync_id AS "syncId", t.account_sync_id AS "accountSyncId",
+            t.category_sync_id AS "categorySyncId", t.type, t.amount_minor AS "amountMinor",
+            t.description, t.occurred_at AS "occurredAt", t.created_at AS "createdAt",
+            t.updated_at AS "updatedAt", t.version
+     FROM transactions t
+     WHERE t.user_id = $1 AND t.deleted_at IS NULL
+     ORDER BY t.occurred_at DESC LIMIT 1000`,
+    [request.userId],
+  );
+  return { transactions: result.rows };
+});
+
+app.post('/v1/transactions', { preHandler: authenticate }, async (request: AuthenticatedRequest, reply) => {
+  const parsed = transactionSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+  const transaction = parsed.data;
+  try {
+    const result = await pool.query(
+      `INSERT INTO transactions
+       (sync_id, user_id, account_sync_id, category_sync_id, type, amount_minor, description, occurred_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING sync_id AS "syncId", account_sync_id AS "accountSyncId",
+                 category_sync_id AS "categorySyncId", type, amount_minor AS "amountMinor",
+                 description, occurred_at AS "occurredAt", created_at AS "createdAt",
+                 updated_at AS "updatedAt", version`,
+      [randomUUID(), request.userId, transaction.accountSyncId, transaction.categorySyncId,
+       transaction.type, transaction.amountMinor, transaction.description, transaction.occurredAt],
+    );
+    return reply.code(201).send(result.rows[0]);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && ['23503', '23514'].includes(String(error.code))) {
+      return reply.code(400).send({ error: 'invalid_financial_reference' });
+    }
+    throw error;
+  }
+});
+
+app.get('/v1/transfers', { preHandler: authenticate }, async (request: AuthenticatedRequest) => {
+  const result = await pool.query(
+    `SELECT sync_id AS "syncId", source_account_sync_id AS "sourceAccountSyncId",
+            destination_account_sync_id AS "destinationAccountSyncId",
+            amount_minor AS "amountMinor", description, occurred_at AS "occurredAt",
+            created_at AS "createdAt", updated_at AS "updatedAt", version
+     FROM transfers WHERE user_id = $1 AND deleted_at IS NULL
+     ORDER BY occurred_at DESC LIMIT 1000`,
+    [request.userId],
+  );
+  return { transfers: result.rows };
+});
+
+app.post('/v1/transfers', { preHandler: authenticate }, async (request: AuthenticatedRequest, reply) => {
+  const parsed = transferSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+  const transfer = parsed.data;
+  try {
+    const result = await pool.query(
+      `INSERT INTO transfers
+       (sync_id, user_id, source_account_sync_id, destination_account_sync_id, amount_minor, description, occurred_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING sync_id AS "syncId", source_account_sync_id AS "sourceAccountSyncId",
+                 destination_account_sync_id AS "destinationAccountSyncId",
+                 amount_minor AS "amountMinor", description, occurred_at AS "occurredAt",
+                 created_at AS "createdAt", updated_at AS "updatedAt", version`,
+      [randomUUID(), request.userId, transfer.sourceAccountSyncId, transfer.destinationAccountSyncId,
+       transfer.amountMinor, transfer.description, transfer.occurredAt],
+    );
+    return reply.code(201).send(result.rows[0]);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && ['23503', '23514'].includes(String(error.code))) {
+      return reply.code(400).send({ error: 'invalid_financial_reference' });
+    }
+    throw error;
+  }
+});
+
 app.setErrorHandler((error, request, reply) => {
   if (error.statusCode === 401) return reply.code(401).send({ error: 'unauthorized' });
   request.log.error({ err: error }, 'Unhandled API error');
