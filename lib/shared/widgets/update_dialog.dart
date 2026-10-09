@@ -73,6 +73,7 @@ Future<void> showUpdateDialog(
                 statusMessage =
                     'Android abrió el instalador. Completa la instalación allí.';
               } else {
+                installerOpened = false;
                 hasError = true;
                 statusMessage =
                     'No se pudo completar la descarga o abrir el instalador. Comprueba tu conexión e inténtalo de nuevo.';
