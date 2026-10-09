@@ -21,6 +21,7 @@ dependencies:
   shared_preferences: ^2.5.6
   crypto: ^3.0.7
   uuid: ^4.6.0
+  file_picker: ^8.1.7
 dev_dependencies:
   flutter_test:
     sdk: flutter
