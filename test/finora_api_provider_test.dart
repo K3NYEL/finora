@@ -8,5 +8,6 @@ void main() {
     addTearDown(container.dispose);
 
     expect(container.read(finoraApiConfiguredProvider), isFalse);
+    expect(container.read(remoteAuthSessionProvider), isNull);
   });
 }
