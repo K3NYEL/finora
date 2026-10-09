@@ -35,6 +35,8 @@ void main() {
       expect(parseAmount(''), isNull);
       expect(parseAmount('abc'), isNull);
       expect(parseAmount('NaN'), isNull);
+      expect(parseAmount('12,34,567'), isNull);
+      expect(parseAmount('12.345'), isNull);
     });
   });
 
