@@ -17,6 +17,7 @@ Future<void> showUpdateDialog(
       var isUpdating = false;
       var installerOpened = false;
       var hasError = false;
+      var permissionRequired = false;
       var receivedBytes = 0;
       int? totalBytes;
       var statusMessage = 'Listo para descargar la actualización.';
@@ -43,12 +44,13 @@ Future<void> showUpdateDialog(
               isUpdating = true;
               installerOpened = false;
               hasError = false;
+              permissionRequired = false;
               receivedBytes = 0;
               totalBytes = null;
               statusMessage = 'Conectando con GitHub…';
             });
 
-            final opened = await UpdateService.downloadAndInstall(
+            final installResult = await UpdateService.downloadAndInstall(
               update,
               onProgress: (received, total) {
                 setState(() {
@@ -59,7 +61,6 @@ Future<void> showUpdateDialog(
               },
               onOpeningInstaller: () {
                 setState(() {
-                  installerOpened = true;
                   statusMessage = 'Descarga completada. Abriendo instalador…';
                 });
               },
@@ -68,15 +69,20 @@ Future<void> showUpdateDialog(
             if (!context.mounted) return;
             setState(() {
               isUpdating = false;
-              if (opened) {
-                installerOpened = true;
-                statusMessage =
-                    'Android abrió el instalador. Completa la instalación allí.';
-              } else {
-                installerOpened = false;
-                hasError = true;
-                statusMessage =
-                    'No se pudo completar la descarga o abrir el instalador. Comprueba tu conexión e inténtalo de nuevo.';
+              switch (installResult) {
+                case ApkInstallResult.opened:
+                  installerOpened = true;
+                  statusMessage =
+                      'Android abrió el instalador. Revisa la pantalla del sistema y confirma la instalación.';
+                case ApkInstallResult.permissionRequired:
+                  hasError = true;
+                  permissionRequired = true;
+                  statusMessage =
+                      'Android necesita permiso para instalar aplicaciones de Finora. Actívalo en Ajustes y vuelve a Finora para pulsar Reintentar.';
+                case ApkInstallResult.failed:
+                  hasError = true;
+                  statusMessage =
+                      'No se pudo descargar el APK o abrir el instalador. Comprueba la conexión e inténtalo de nuevo.';
               }
             });
           }
@@ -90,7 +96,9 @@ Future<void> showUpdateDialog(
                     : installerOpened
                         ? 'Instalador abierto'
                         : hasError
-                            ? 'No se pudo actualizar'
+                            ? permissionRequired
+                                ? 'Permiso necesario'
+                                : 'No se pudo actualizar'
                             : 'Nueva versión disponible',
               ),
               content: SingleChildScrollView(
@@ -179,7 +187,13 @@ Future<void> showUpdateDialog(
                     !installerOpened)
                   FilledButton(
                     onPressed: startUpdate,
-                    child: Text(hasError ? 'Reintentar' : 'Actualizar'),
+                    child: Text(
+                      permissionRequired
+                          ? 'Reintentar'
+                          : hasError
+                              ? 'Reintentar'
+                              : 'Actualizar',
+                    ),
                   ),
                 if (installerOpened || !isAndroid)
                   FilledButton(
