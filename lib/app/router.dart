@@ -66,7 +66,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/post-login-loading',
-        builder: (_, __) => FinoraLoadingScreen(
+        builder: (context, __) => FinoraLoadingScreen(
           onReady: () => context.go('/'),
         ),
       ),
