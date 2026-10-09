@@ -69,17 +69,21 @@ test('database prevents cross-user account and private-category references', asy
       [privateCategoryA, userA],
     );
 
+    await client.query('SAVEPOINT cross_owner_check');
     await assert.rejects(client.query(
       `INSERT INTO transactions (sync_id, user_id, account_sync_id, category_sync_id, type, amount_minor, occurred_at)
        VALUES ($1, $2, $3, '00000000-0000-4000-8000-000000000006', 'expense', 100, now())`,
       [randomUUID(), userB, accountA],
     ));
+    await client.query('ROLLBACK TO SAVEPOINT cross_owner_check');
 
+    await client.query('SAVEPOINT cross_category_check');
     await assert.rejects(client.query(
       `INSERT INTO transactions (sync_id, user_id, account_sync_id, category_sync_id, type, amount_minor, occurred_at)
        VALUES ($1, $2, $3, $4, 'expense', 100, now())`,
       [randomUUID(), userB, accountB, privateCategoryA],
     ));
+    await client.query('ROLLBACK TO SAVEPOINT cross_category_check');
     await client.query('ROLLBACK');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
