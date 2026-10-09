@@ -5,9 +5,13 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#38BDF8"
-        android:pathData="M18,76 L36,58 L52,74 L82,44 L82,58 L52,88 L36,72 L24,84 Z" />
+        android:fillColor="#0F172A"
+        android:pathData="M0,0h108v108h-108z" />
+    <!-- High-contrast chart and upward arrow, enlarged for launcher visibility. -->
     <path
         android:fillColor="#38BDF8"
-        android:pathData="M68,34 L88,34 L88,54 L82,54 L82,42 L68,42 Z" />
+        android:pathData="M12,68h20v28h-20z M38,48h20v48h-20z M64,28h20v68h-20z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M14,47 L40,28 L55,37 L82,10 L98,10 L98,26 L56,66 L41,57 L24,70 Z" />
 </vector>
