@@ -84,6 +84,13 @@ jobs:
             exit 1
           fi
 
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$TAG_VERSION" != "$VERSION" ]; then
+            echo "ERROR: Git tag v$TAG_VERSION does not match pubspec.yaml version $VERSION."
+            echo "Update pubspec.yaml or push a tag that matches the app version."
+            exit 1
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Release version: $VERSION"
