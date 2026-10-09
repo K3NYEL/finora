@@ -95,6 +95,48 @@
     .footer-brand .mark{width:27px;height:27px;font-size:.9rem;border-radius:8px}
     .copyright{font-size:.78rem;color:#7a8385}
     .footer-links{display:flex;gap:20px;font-size:.82rem;color:#58646b}
+
+    /* Movimiento sutil: la página cobra vida sin distraer del contenido. */
+    .js-motion .hero-copy > *{animation:rise-in .7s cubic-bezier(.2,.7,.2,1) both}
+    .js-motion .hero-copy > *:nth-child(1){animation-delay:.04s}
+    .js-motion .hero-copy > *:nth-child(2){animation-delay:.12s}
+    .js-motion .hero-copy > *:nth-child(3){animation-delay:.2s}
+    .js-motion .hero-copy > *:nth-child(4){animation-delay:.28s}
+    .js-motion .hero-copy > *:nth-child(5){animation-delay:.34s}
+    .js-motion .sheet{animation:sheet-in .9s cubic-bezier(.2,.75,.2,1) .12s both}
+    .js-motion .art:before{animation:soft-breathe 7s ease-in-out infinite}
+    .js-motion .art:after{animation:ring-drift 9s ease-in-out infinite}
+    .js-motion .demo-label{animation:rise-in .65s ease-out .65s both}
+    .js-motion .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+    .js-motion .reveal.is-visible{opacity:1;transform:translateY(0)}
+    .js-motion .feature{transition:background .25s ease,transform .25s ease,border-color .25s ease}
+    .js-motion .feature:hover{background:#fffefa;transform:translateY(-4px);border-color:#b7dce9}
+    .js-motion .feature-number{transition:letter-spacing .25s ease}
+    .js-motion .feature:hover .feature-number{letter-spacing:.04em}
+    .js-motion .bar{transform:scaleY(.08);transform-origin:bottom;transition:transform .85s cubic-bezier(.2,.7,.2,1)}
+    .js-motion .chart.is-visible .bar{transform:scaleY(1)}
+    .js-motion .chart.is-visible .bar:nth-child(2){transition-delay:.05s}
+    .js-motion .chart.is-visible .bar:nth-child(3){transition-delay:.1s}
+    .js-motion .chart.is-visible .bar:nth-child(4){transition-delay:.15s}
+    .js-motion .chart.is-visible .bar:nth-child(5){transition-delay:.2s}
+    .js-motion .chart.is-visible .bar:nth-child(6){transition-delay:.25s}
+    .js-motion .chart.is-visible .bar:nth-child(7){transition-delay:.3s}
+    .js-motion .chart.is-visible .bar:nth-child(8){transition-delay:.35s}
+    .js-motion .strip-item{transition:color .2s ease,transform .2s ease}
+    .js-motion .strip-item:hover{color:var(--blue-dark);transform:translateY(-2px)}
+    .js-motion .mark{transition:transform .25s ease}
+    .js-motion .brand:hover .mark,.js-motion .footer-brand:hover .mark{transform:rotate(-8deg) scale(1.06)}
+    @keyframes rise-in{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes sheet-in{from{opacity:0;transform:translateY(22px) rotate(1deg)}to{opacity:1;transform:translateY(0) rotate(-1.3deg)}}
+    @keyframes soft-breathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.045);opacity:.78}}
+    @keyframes ring-drift{0%,100%{transform:translate(0,0)}50%{transform:translate(-8px,-10px)}}
+    @media(prefers-reduced-motion:reduce){
+      html{scroll-behavior:auto}
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+      .js-motion .reveal{opacity:1;transform:none}
+      .js-motion .bar{transform:none}
+    }
+
     @media(max-width:850px){.hero{grid-template-columns:1fr;gap:25px;padding:65px 0 70px}.hero-copy{max-width:680px}.art{min-height:440px}.art:before{right:10%}.section-intro{grid-template-columns:1fr;gap:18px}.principle{grid-template-columns:1fr;gap:25px}.closing{padding:42px;align-items:flex-start;flex-direction:column}.strip-inner{justify-content:flex-start;flex-wrap:wrap}.strip-label{width:100%}}
     @media(max-width:600px){.wrap{width:calc(100% - 32px)}header{height:72px}nav{gap:13px;font-size:.8rem}nav a:first-child,nav a:nth-child(2){display:none}.nav-cta{padding:8px 12px}.hero{padding:51px 0 55px}h1{font-size:clamp(3.3rem,15vw,5rem)}.intro{font-size:1rem}.art{min-height:370px}.art:before{width:290px;height:290px;right:4%;top:8%}.sheet{padding:18px}.balance{font-size:2rem}.chart{height:74px}.demo-label{bottom:0}.strip-inner{gap:13px 20px}.strip-item{font-size:.8rem}section.content{padding:65px 0}.features{grid-template-columns:1fr}.feature{min-height:0;padding:22px}.feature h3{margin-top:13px}.principle{padding-bottom:60px}.principle-note{padding:25px}.closing{padding:30px 23px;margin-bottom:55px}.footer-inner{align-items:flex-start;flex-direction:column}.footer-links{gap:14px;flex-wrap:wrap}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important}}
@@ -199,6 +241,32 @@
       <div class="footer-links"><a href="https://github.com/K3NYEL/finora">GitHub</a><a href="https://github.com/K3NYEL/finora/releases">Versiones</a><a href="https://github.com/K3NYEL/finora/issues">Soporte y sugerencias</a></div>
     </div>
   </footer>
-  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    (function () {
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const revealTargets = document.querySelectorAll('.strip-inner, .section-intro, .feature, .principle-note, .principle-copy, .closing, footer');
+      revealTargets.forEach((el, index) => {
+        el.classList.add('reveal');
+        if (el.classList.contains('feature')) el.style.transitionDelay = (index % 3) * 75 + 'ms';
+      });
+      document.documentElement.classList.add('js-motion');
+      if (reduceMotion || !('IntersectionObserver' in window)) {
+        revealTargets.forEach(el => el.classList.add('is-visible'));
+        document.querySelectorAll('.chart').forEach(el => el.classList.add('is-visible'));
+        return;
+      }
+      const observer = new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            obs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.14, rootMargin: '0px 0px -35px 0px' });
+      revealTargets.forEach(el => observer.observe(el));
+      document.querySelectorAll('.chart').forEach(el => observer.observe(el));
+    })();
+  </script>
 </body>
 </html>
