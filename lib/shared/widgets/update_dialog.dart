@@ -47,7 +47,9 @@ Future<void> showUpdateDialog(
               permissionRequired = false;
               receivedBytes = 0;
               totalBytes = null;
-              statusMessage = 'Conectando con GitHub…';
+              statusMessage = permissionRequired
+                  ? 'Usando el APK descargado. Preparando el instalador…'
+                  : 'Preparando actualización…';
             });
 
             final installResult = await UpdateService.downloadAndInstall(
@@ -61,7 +63,7 @@ Future<void> showUpdateDialog(
               },
               onOpeningInstaller: () {
                 setState(() {
-                  statusMessage = 'Descarga completada. Abriendo instalador…';
+                  statusMessage = 'APK listo. Abriendo instalador de Android…';
                 });
               },
             );
