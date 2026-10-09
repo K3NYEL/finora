@@ -40,6 +40,9 @@ Future<void> showUpdateDialog(
               : (progress * 100).round();
 
           Future<void> startUpdate() async {
+            // Capture this before resetting the state: a permission retry should
+            // tell the user we are reusing the cached APK, not downloading again.
+            final retryingAfterPermission = permissionRequired;
             setState(() {
               isUpdating = true;
               installerOpened = false;
@@ -47,7 +50,9 @@ Future<void> showUpdateDialog(
               permissionRequired = false;
               receivedBytes = 0;
               totalBytes = null;
-              statusMessage = 'Conectando con GitHub…';
+              statusMessage = retryingAfterPermission
+                  ? 'Usando el APK descargado. Preparando el instalador…'
+                  : 'Preparando actualización…';
             });
 
             final installResult = await UpdateService.downloadAndInstall(
@@ -61,7 +66,7 @@ Future<void> showUpdateDialog(
               },
               onOpeningInstaller: () {
                 setState(() {
-                  statusMessage = 'Descarga completada. Abriendo instalador…';
+                  statusMessage = 'APK listo. Abriendo instalador de Android…';
                 });
               },
             );
