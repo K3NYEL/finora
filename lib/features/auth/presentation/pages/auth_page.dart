@@ -142,7 +142,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     final api = ref.read(finoraApiClientProvider);
     final repository = ref.read(authRepositoryProvider);
     AppUser localUser;
-    FinoraApiSession? remoteSession;
+    late final FinoraApiSession remoteSession;
 
     if (_isRegistering) {
       // Create the local identity first so local finance data remains usable
@@ -161,6 +161,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
           passwordConfirmation: _confirmPasswordController.text,
         );
       } on FinoraApiException catch (error) {
+        ref.read(remoteAuthSessionProvider.notifier).state = null;
         await ref.read(sessionProvider.notifier).setUser(localUser);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
