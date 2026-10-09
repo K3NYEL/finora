@@ -102,6 +102,45 @@ class FinoraApiClient {
   Future<Map<String, dynamic>> me(String accessToken) =>
       _request('GET', '/v1/me', accessToken: accessToken);
 
+  /// Validates a local backup on the server without importing any records.
+  Future<FinoraBackupPreview> previewBackup({
+    required String accessToken,
+    required String backupJson,
+    required String currencyCode,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/v1/import/preview',
+      accessToken: accessToken,
+      body: {'backupJson': backupJson, 'currencyCode': currencyCode},
+    );
+    return FinoraBackupPreview.fromJson(result);
+  }
+
+  /// Imports a backup only after the caller explicitly confirms the preview.
+  Future<Map<String, dynamic>> importBackup({
+    required String accessToken,
+    required String backupJson,
+    required String currencyCode,
+    required bool confirm,
+  }) {
+    if (!confirm) {
+      throw const FinoraApiException(
+        'Confirma la importación después de revisar la vista previa.',
+      );
+    }
+    return _request(
+      'POST',
+      '/v1/import/backup',
+      accessToken: accessToken,
+      body: {
+        'backupJson': backupJson,
+        'currencyCode': currencyCode,
+        'confirm': true,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -168,6 +207,10 @@ class FinoraApiClient {
         return 'La sesión ha caducado. Inicia sesión de nuevo.';
       case 'service_unavailable':
         return 'El servicio de Finora no está disponible temporalmente.';
+      case 'backup_already_imported':
+        return 'Esta copia ya fue importada en esta cuenta.';
+      case 'explicit_confirmation_required':
+        return 'La importación requiere confirmación explícita.';
       default:
         if (statusCode == 401) return 'Debes iniciar sesión de nuevo.';
         if (statusCode == 409) return 'La operación entra en conflicto con datos existentes.';
@@ -178,6 +221,50 @@ class FinoraApiClient {
 
   void close() {
     if (_ownsClient) _httpClient.close();
+  }
+}
+
+class FinoraBackupPreview {
+  const FinoraBackupPreview({
+    required this.checksum,
+    required this.alreadyImported,
+    required this.currencyCode,
+    required this.accounts,
+    required this.categories,
+    required this.transactions,
+    required this.transfers,
+  });
+
+  final String checksum;
+  final bool alreadyImported;
+  final String currencyCode;
+  final int accounts;
+  final int categories;
+  final int transactions;
+  final int transfers;
+
+  factory FinoraBackupPreview.fromJson(Map<String, dynamic> json) {
+    final counts = json['counts'];
+    if (json['checksum'] is! String ||
+        json['alreadyImported'] is! bool ||
+        json['currencyCode'] is! String ||
+        counts is! Map<String, dynamic> ||
+        !['accounts', 'categories', 'transactions', 'transfers'].every(
+          (key) => counts[key] is int && (counts[key] as int) >= 0,
+        )) {
+      throw const FinoraApiException(
+        'La API devolvió una vista previa de copia inválida.',
+      );
+    }
+    return FinoraBackupPreview(
+      checksum: json['checksum'] as String,
+      alreadyImported: json['alreadyImported'] as bool,
+      currencyCode: json['currencyCode'] as String,
+      accounts: counts['accounts'] as int,
+      categories: counts['categories'] as int,
+      transactions: counts['transactions'] as int,
+      transfers: counts['transfers'] as int,
+    );
   }
 }
 
