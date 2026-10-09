@@ -99,7 +99,9 @@ class DashboardPage extends ConsumerWidget {
                 child: DashboardStat(
                   'Ingresos',
                   summary.income,
-                  AppColors.success,
+                  theme.brightness == Brightness.dark
+                      ? AppColors.success
+                      : const Color(0xFF15803D),
                 ),
               ),
               Expanded(
