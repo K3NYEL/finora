@@ -39,7 +39,8 @@ class AppSettings {
 }
 
 class SettingsNotifier extends Notifier<AppSettings> {
-  int _revision = 0;
+  int _themeRevision = 0;
+  int _animationsRevision = 0;
 
   @override
   AppSettings build() {
@@ -48,29 +49,32 @@ class SettingsNotifier extends Notifier<AppSettings> {
   }
 
   Future<void> _load() async {
-    final revisionAtStart = _revision;
+    final themeRevisionAtStart = _themeRevision;
+    final animationsRevisionAtStart = _animationsRevision;
     final values = await Future.wait<Object>([
       AppPreferences.getTheme(),
       AppPreferences.getAnimations(),
     ]);
 
-    // A fast user interaction must not be overwritten by this late load.
-    if (revisionAtStart != _revision) return;
-
-    state = AppSettings(
-      theme: values[0] as ThemePreference,
-      animationsEnabled: values[1] as bool,
+    // A late preference read must not overwrite a setting changed by the user.
+    state = state.copyWith(
+      theme: themeRevisionAtStart == _themeRevision
+          ? values[0] as ThemePreference
+          : state.theme,
+      animationsEnabled: animationsRevisionAtStart == _animationsRevision
+          ? values[1] as bool
+          : state.animationsEnabled,
     );
   }
 
   Future<void> setTheme(ThemePreference theme) async {
-    _revision++;
+    _themeRevision++;
     state = state.copyWith(theme: theme);
     await AppPreferences.setTheme(theme);
   }
 
   Future<void> setAnimations(bool enabled) async {
-    _revision++;
+    _animationsRevision++;
     state = state.copyWith(animationsEnabled: enabled);
     await AppPreferences.setAnimations(enabled);
   }
