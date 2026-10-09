@@ -43,6 +43,13 @@ double? parseAmount(String input) {
     }
   }
 
+  // Finora stores currency to two decimal places; reject malformed or
+  // over-precise input rather than silently rounding it in the database.
+  if (!RegExp(r'^[+-]?\\d+(?:\\.\\d{1,2})?
+).hasMatch(value)) {
+    return null;
+  }
+
   final amount = double.tryParse(value);
   if (amount == null || !amount.isFinite) return null;
   return amount;
