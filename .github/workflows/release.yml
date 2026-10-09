@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to build and attach APKs to (for example v0.5.18)"
+        required: true
+        default: "v0.5.18"
+        type: string
 
 permissions:
   contents: read
@@ -28,9 +35,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
           git fetch origin main --no-tags
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/main"; then
-            echo "ERROR: Release tags must point to a commit contained in main."
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          TAG_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          if ! git merge-base --is-ancestor "$TAG_SHA" "origin/main"; then
+            echo "ERROR: Release tags must point to a commit contained in main history."
             exit 1
           fi
 
@@ -113,7 +123,8 @@ jobs:
             exit 1
           fi
 
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$TAG_VERSION" != "$VERSION" ]; then
             echo "ERROR: Git tag v$TAG_VERSION does not match pubspec.yaml version $VERSION."
             exit 1
@@ -131,6 +142,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
@@ -151,7 +163,7 @@ jobs:
             "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=100" \
             -o /tmp/finora-releases.json
 
-          PREVIOUS_APK_URL="$(python3 - "$GITHUB_REF_NAME" <<'PY'
+          PREVIOUS_APK_URL="$(python3 - "$RELEASE_TAG" <<'PY'
           import json
           import sys
 
@@ -228,6 +240,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           generate_release_notes: true
           body: |
             ## Finora v${{ steps.version.outputs.version }}
