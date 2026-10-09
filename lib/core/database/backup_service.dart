@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:sqflite/sqflite.dart';
 
 import 'database.dart';
@@ -157,8 +159,26 @@ class BackupService {
       }
     }
 
+    final checksum = sha256.convert(utf8.encode(jsonText)).toString();
     final db = await AppDatabase.instance;
     return db.transaction((txn) async {
+      await txn.execute('''
+        CREATE TABLE IF NOT EXISTS finora_backup_imports(
+          checksum TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          imported_at TEXT NOT NULL
+        )
+      ''');
+      final previousImport = await txn.query(
+        'finora_backup_imports',
+        where: 'checksum = ? AND user_id = ?',
+        whereArgs: [checksum, userId],
+        limit: 1,
+      );
+      if (previousImport.isNotEmpty) {
+        throw const AppException('Esta copia ya se restauró en esta cuenta.');
+      }
+
       final users = await txn.query(
         'users',
         columns: ['id'],
@@ -245,6 +265,12 @@ class BackupService {
               : row['date'],
         });
       }
+
+      await txn.insert('finora_backup_imports', {
+        'checksum': checksum,
+        'user_id': userId,
+        'imported_at': DateTime.now().toUtc().toIso8601String(),
+      });
 
       return {
         'accounts': accounts.length,
