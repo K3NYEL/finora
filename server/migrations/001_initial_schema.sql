@@ -122,6 +122,93 @@ CREATE TABLE sync_changes (
 );
 CREATE INDEX sync_changes_owner_cursor_idx ON sync_changes(user_id, cursor);
 
+
+CREATE TABLE backup_imports (
+  id UUID PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  checksum TEXT NOT NULL CHECK (checksum ~ '^[0-9a-f]{64}
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  category_owner TEXT;
+  category_system BOOLEAN;
+  category_type TEXT;
+BEGIN
+  SELECT user_id, is_system, type
+    INTO category_owner, category_system, category_type
+  FROM categories
+  WHERE sync_id = NEW.category_sync_id AND deleted_at IS NULL;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'category_not_available' USING ERRCODE = '23503';
+  END IF;
+  IF NOT category_system AND category_owner IS DISTINCT FROM NEW.user_id THEN
+    RAISE EXCEPTION 'category_owner_mismatch' USING ERRCODE = '23514';
+  END IF;
+  IF category_type <> NEW.type THEN
+    RAISE EXCEPTION 'category_type_mismatch' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER transactions_category_owner_guard
+BEFORE INSERT OR UPDATE OF user_id, category_sync_id, type ON transactions
+FOR EACH ROW EXECUTE FUNCTION finora_check_transaction_category();
+
+CREATE OR REPLACE FUNCTION finora_check_transfer_currency()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  source_currency CHAR(3);
+  destination_currency CHAR(3);
+BEGIN
+  SELECT currency_code INTO source_currency
+    FROM accounts
+    WHERE sync_id = NEW.source_account_sync_id AND user_id = NEW.user_id AND deleted_at IS NULL;
+  SELECT currency_code INTO destination_currency
+    FROM accounts
+    WHERE sync_id = NEW.destination_account_sync_id AND user_id = NEW.user_id AND deleted_at IS NULL;
+  IF source_currency IS NULL OR destination_currency IS NULL THEN
+    RAISE EXCEPTION 'transfer_account_not_available' USING ERRCODE = '23503';
+  END IF;
+  IF source_currency <> destination_currency THEN
+    RAISE EXCEPTION 'transfer_currency_mismatch' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER transfers_currency_guard
+BEFORE INSERT OR UPDATE OF user_id, source_account_sync_id, destination_account_sync_id ON transfers
+FOR EACH ROW EXECUTE FUNCTION finora_check_transfer_currency();
+
+INSERT INTO categories (sync_id, user_id, name, type, is_default, is_system) VALUES
+  ('00000000-0000-4000-8000-000000000001', NULL, 'Alimentación', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000002', NULL, 'Transporte', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000003', NULL, 'Vivienda', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000004', NULL, 'Salud', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000005', NULL, 'Ocio', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000006', NULL, 'Otros gastos', 'expense', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000007', NULL, 'Salario', 'income', TRUE, TRUE),
+  ('00000000-0000-4000-8000-000000000008', NULL, 'Otros ingresos', 'income', TRUE, TRUE);
+
+INSERT INTO schema_migrations(version) VALUES ('001_initial_schema');
+
+COMMIT;
+),
+  counts JSONB NOT NULL,
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, checksum)
+);
+
+CREATE TABLE local_entity_mappings (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('account', 'category', 'transaction', 'transfer')),
+  local_id TEXT NOT NULL,
+  sync_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, entity_type, local_id),
+  UNIQUE (user_id, entity_type, sync_id)
+);
+CREATE INDEX local_entity_mappings_sync_idx ON local_entity_mappings(user_id, sync_id);
+
 CREATE OR REPLACE FUNCTION finora_check_transaction_category()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
