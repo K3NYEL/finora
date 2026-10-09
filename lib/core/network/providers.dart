@@ -13,3 +13,6 @@ final finoraApiClientProvider = Provider<FinoraApiClient>((ref) {
 final finoraApiConfiguredProvider = Provider<bool>(
   (ref) => ref.watch(finoraApiClientProvider).isConfigured,
 );
+
+/// Holds the short-lived remote session in memory only. It is never persisted.
+final remoteAuthSessionProvider = StateProvider<FinoraApiSession?>((ref) => null);
