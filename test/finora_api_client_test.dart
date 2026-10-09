@@ -118,4 +118,91 @@ void main() {
       throwsA(isA<FinoraApiException>()),
     );
   });
+
+  test('previews backup with authenticated request without importing it', () async {
+    late http.Request captured;
+    final client = FinoraApiClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            'checksum': 'a' * 64,
+            'alreadyImported': false,
+            'currencyCode': 'DOP',
+            'counts': {
+              'accounts': 2,
+              'categories': 3,
+              'transactions': 4,
+              'transfers': 1,
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    final preview = await client.previewBackup(
+      accessToken: 'test-access-token',
+      backupJson: '{"format":"finora-backup"}',
+      currencyCode: 'dop',
+    );
+
+    expect(captured.url.path, '/v1/import/preview');
+    expect(captured.headers['authorization'], 'Bearer test-access-token');
+    expect(jsonDecode(captured.body)['currencyCode'], 'dop');
+    expect(preview.accounts, 2);
+    expect(preview.transactions, 4);
+    expect(preview.alreadyImported, isFalse);
+    client.close();
+  });
+
+  test('refuses backup import without explicit confirmation', () async {
+    var requestSent = false;
+    final client = FinoraApiClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((_) async {
+        requestSent = true;
+        return http.Response('{}', 201);
+      }),
+    );
+
+    await expectLater(
+      client.importBackup(
+        accessToken: 'test-access-token',
+        backupJson: '{"format":"finora-backup"}',
+        currencyCode: 'DOP',
+        confirm: false,
+      ),
+      throwsA(isA<FinoraApiException>()),
+    );
+    expect(requestSent, isFalse);
+    client.close();
+  });
+
+  test('sends explicit confirmation for backup import', () async {
+    late http.Request captured;
+    final client = FinoraApiClient(
+      baseUrl: 'https://api.example.test',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({'imported': true, 'counts': {'accounts': 1}}),
+          201,
+        );
+      }),
+    );
+
+    await client.importBackup(
+      accessToken: 'test-access-token',
+      backupJson: '{"format":"finora-backup"}',
+      currencyCode: 'DOP',
+      confirm: true,
+    );
+
+    expect(captured.url.path, '/v1/import/backup');
+    expect(captured.headers['authorization'], 'Bearer test-access-token');
+    expect(jsonDecode(captured.body)['confirm'], isTrue);
+    client.close();
+  });
 }
