@@ -187,9 +187,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Escribe exactamente: '
-                '${LegacyDataMigrationService.confirmationPhrase}',
+              const Text(
+                'Escribe exactamente: ${LegacyDataMigrationService.confirmationPhrase}',
               ),
               const SizedBox(height: 8),
               TextField(
