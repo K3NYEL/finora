@@ -20,6 +20,15 @@ class FinoraApp extends ConsumerWidget {
       darkTheme: _darkTheme,
       themeMode: settings.themeMode,
       routerConfig: ref.watch(appRouterProvider),
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            disableAnimations: !settings.animationsEnabled,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       debugShowCheckedModeBanner: false,
     );
   }
