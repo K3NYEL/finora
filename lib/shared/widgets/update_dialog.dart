@@ -74,15 +74,18 @@ Future<void> showUpdateDialog(
                   installerOpened = true;
                   statusMessage =
                       'Android abrió el instalador. Revisa la pantalla del sistema y confirma la instalación.';
+                  break;
                 case ApkInstallResult.permissionRequired:
                   hasError = true;
                   permissionRequired = true;
                   statusMessage =
                       'Android necesita permiso para instalar aplicaciones de Finora. Actívalo en Ajustes y vuelve a Finora para pulsar Reintentar.';
+                  break;
                 case ApkInstallResult.failed:
                   hasError = true;
                   statusMessage =
                       'No se pudo descargar el APK o abrir el instalador. Comprueba la conexión e inténtalo de nuevo.';
+                  break;
               }
             });
           }
