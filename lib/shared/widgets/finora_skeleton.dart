@@ -149,7 +149,7 @@ class DashboardSkeleton extends StatelessWidget {
                 ],
               ),
             ),
-            const SkeletonBox(width: 44, height: 44, borderRadius: 14),
+            SkeletonBox(width: 44, height: 44, borderRadius: 14),
           ],
         ),
         SizedBox(height: 20),
