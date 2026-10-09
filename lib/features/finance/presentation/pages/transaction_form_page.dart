@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/utils/amount_parser.dart';
 import '../../../../shared/widgets/async_state_view.dart';
 import '../providers.dart';
 
@@ -26,22 +27,27 @@ class _State extends ConsumerState<TransactionFormPage> {
   }
 
   Future<void> _save() async {
+    if (_busy) return;
     setState(() => _busy = true);
     final repo = ref.read(repoProvider);
-    final amount = double.tryParse(_amount.text.replaceAll(',', '')) ?? 0;
+    final amount = parseAmount(_amount.text) ?? 0;
     String? error;
     try {
       if (_acc == null) throw const AppException('Elige una cuenta.');
+      if (amount <= 0) {
+        throw const AppException('Escribe un monto válido mayor que cero.');
+      }
       if (_isTransfer) {
         if (_dest == null) throw const AppException('Elige la cuenta destino.');
         await repo.addTransfer(_acc!, _dest!, amount, _desc.text);
       } else {
         await repo.addTransaction(
-            accountId: _acc!,
-            categoryId: _cat,
-            type: widget.kind,
-            amount: amount,
-            description: _desc.text);
+          accountId: _acc!,
+          categoryId: _cat,
+          type: widget.kind,
+          amount: amount,
+          description: _desc.text,
+        );
       }
     } on AppException catch (e) {
       error = e.message;
@@ -63,12 +69,14 @@ class _State extends ConsumerState<TransactionFormPage> {
   Widget _drop(String label, int? value, List<DropdownMenuItem<int>> items,
           ValueChanged<int?> on) =>
       Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: DropdownButtonFormField<int>(
-              initialValue: value,
-              items: items,
-              onChanged: on,
-              decoration: InputDecoration(labelText: label)));
+        padding: const EdgeInsets.only(bottom: 12),
+        child: DropdownButtonFormField<int>(
+          initialValue: value,
+          items: items,
+          onChanged: on,
+          decoration: InputDecoration(labelText: label),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -113,14 +121,22 @@ class _State extends ConsumerState<TransactionFormPage> {
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: Theme.of(context).textTheme.headlineMedium,
-            decoration: const InputDecoration(labelText: 'Monto (RD\$)'),
+            decoration: const InputDecoration(labelText: 'Monto (RD$)'),
           ),
           const SizedBox(height: 12),
-          _drop(_isTransfer ? 'Cuenta origen' : 'Cuenta', _acc, accountItems,
-              (value) => setState(() => _acc = value)),
+          _drop(
+            _isTransfer ? 'Cuenta origen' : 'Cuenta',
+            _acc,
+            accountItems,
+            (value) => setState(() => _acc = value),
+          ),
           if (_isTransfer)
-            _drop('Cuenta destino', _dest, accountItems,
-                (value) => setState(() => _dest = value)),
+            _drop(
+              'Cuenta destino',
+              _dest,
+              accountItems,
+              (value) => setState(() => _dest = value),
+            ),
           if (!_isTransfer)
             _drop(
               'Categoría',
@@ -142,9 +158,15 @@ class _State extends ConsumerState<TransactionFormPage> {
           const SizedBox(height: 20),
           FilledButton(
             onPressed: _busy ? null : _save,
-            child: const Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('Guardar'),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: _busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Guardar'),
             ),
           ),
         ],
