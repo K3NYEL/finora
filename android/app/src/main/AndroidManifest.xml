@@ -5,7 +5,9 @@
     <application
         android:label="Finora"
         android:name="${applicationName}"
-        android:icon="@drawable/ic_finora">
+        android:icon="@drawable/ic_finora"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="false">
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
