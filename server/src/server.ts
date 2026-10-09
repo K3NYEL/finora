@@ -5,7 +5,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import argon2 from 'argon2';
 import { SignJWT, jwtVerify } from 'jose';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pool } from './db.js';
 
@@ -13,7 +13,7 @@ const app = Fastify({
   logger: {
     redact: ['req.headers.authorization', 'req.headers.cookie', 'req.body.password', 'req.body.passwordConfirmation'],
   },
-  bodyLimit: 32 * 1024,
+  bodyLimit: 5 * 1024 * 1024,
   trustProxy: process.env.TRUST_PROXY === 'true',
 });
 
@@ -343,6 +343,272 @@ app.post('/v1/transfers', { preHandler: authenticate }, async (request: Authenti
       return reply.code(400).send({ error: 'invalid_financial_reference' });
     }
     throw error;
+  }
+});
+
+
+const backupAccountSchema = z.object({
+  id: z.number().int().safe(),
+  name: z.string().min(1).max(120),
+  type: z.string().min(1).max(40),
+  initial_balance: z.number().finite(),
+  initial_balance_minor: z.number().int().safe().nullable().optional(),
+  created_at: z.string().datetime({ offset: true }),
+  is_archived: z.union([z.literal(0), z.literal(1), z.boolean()]).optional(),
+});
+const backupCategorySchema = z.object({
+  id: z.number().int().safe(),
+  name: z.string().min(1).max(100),
+  type: z.enum(['income', 'expense']),
+});
+const backupTransactionSchema = z.object({
+  id: z.number().int().safe(),
+  account_id: z.number().int().safe(),
+  category_id: z.number().int().safe(),
+  type: z.enum(['income', 'expense']),
+  amount: z.number().finite(),
+  amount_minor: z.number().int().safe().nullable().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  date: z.string().datetime({ offset: true }),
+  created_at: z.string().datetime({ offset: true }).optional(),
+});
+const backupTransferSchema = z.object({
+  id: z.number().int().safe(),
+  source_account_id: z.number().int().safe(),
+  destination_account_id: z.number().int().safe(),
+  amount: z.number().finite(),
+  amount_minor: z.number().int().safe().nullable().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  date: z.string().datetime({ offset: true }),
+  created_at: z.string().datetime({ offset: true }).optional(),
+});
+const backupRootSchema = z.object({
+  format: z.literal('finora-backup'),
+  schema_version: z.literal(1),
+  accounts: z.array(backupAccountSchema).max(5000),
+  categories: z.array(backupCategorySchema).max(2000),
+  transactions: z.array(backupTransactionSchema).max(50000),
+  transfers: z.array(backupTransferSchema).max(20000),
+});
+const backupRequestSchema = z.object({
+  backupJson: z.string().min(2).max(4_000_000),
+  currencyCode: z.string().regex(/^[A-Za-z]{3}$/).transform((value) => value.toUpperCase()),
+}).strict();
+type FinoraBackup = z.infer<typeof backupRootSchema>;
+
+function validateBackup(raw: string): { backup: FinoraBackup; checksum: string } {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    throw Object.assign(new Error('invalid_backup_json'), { statusCode: 400 });
+  }
+  const parsed = backupRootSchema.safeParse(decoded);
+  if (!parsed.success) throw Object.assign(new Error('invalid_backup_format'), { statusCode: 400 });
+  const backup = parsed.data;
+  const accountIds = new Set<number>();
+  const categoryIds = new Set<number>();
+  const categoryTypes = new Map<number, string>();
+
+  for (const account of backup.accounts) {
+    if (accountIds.has(account.id) || account.initial_balance < 0) {
+      throw Object.assign(new Error('invalid_backup_account'), { statusCode: 400 });
+    }
+    if (account.initial_balance_minor != null &&
+        account.initial_balance_minor !== Math.round(account.initial_balance * 100)) {
+      throw Object.assign(new Error('money_discrepancy'), { statusCode: 400 });
+    }
+    accountIds.add(account.id);
+  }
+  for (const category of backup.categories) {
+    if (categoryIds.has(category.id)) throw Object.assign(new Error('duplicate_backup_category'), { statusCode: 400 });
+    categoryIds.add(category.id);
+    categoryTypes.set(category.id, category.type);
+  }
+  for (const transaction of backup.transactions) {
+    const minor = transaction.amount_minor ?? Math.round(transaction.amount * 100);
+    if (!accountIds.has(transaction.account_id) || !categoryIds.has(transaction.category_id) ||
+        transaction.amount <= 0 || !Number.isSafeInteger(minor) || minor <= 0 ||
+        (transaction.amount_minor != null && transaction.amount_minor !== Math.round(transaction.amount * 100)) ||
+        categoryTypes.get(transaction.category_id) !== transaction.type) {
+      throw Object.assign(new Error('invalid_backup_transaction'), { statusCode: 400 });
+    }
+  }
+  for (const transfer of backup.transfers) {
+    const minor = transfer.amount_minor ?? Math.round(transfer.amount * 100);
+    if (!accountIds.has(transfer.source_account_id) ||
+        !accountIds.has(transfer.destination_account_id) ||
+        transfer.source_account_id === transfer.destination_account_id ||
+        transfer.amount <= 0 || !Number.isSafeInteger(minor) || minor <= 0 ||
+        (transfer.amount_minor != null && transfer.amount_minor !== Math.round(transfer.amount * 100))) {
+      throw Object.assign(new Error('invalid_backup_transfer'), { statusCode: 400 });
+    }
+  }
+  const checksum = createHash('sha256').update(raw, 'utf8').digest('hex');
+  return { backup, checksum };
+}
+
+app.post('/v1/import/preview', {
+  preHandler: authenticate,
+  config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+}, async (request: AuthenticatedRequest, reply) => {
+  const requestParsed = backupRequestSchema.safeParse(request.body);
+  if (!requestParsed.success) return reply.code(400).send({ error: 'invalid_request' });
+  let validated: ReturnType<typeof validateBackup>;
+  try {
+    validated = validateBackup(requestParsed.data.backupJson);
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) return reply.code(400).send({ error: error.message });
+    throw error;
+  }
+  const previous = await pool.query(
+    'SELECT 1 FROM backup_imports WHERE user_id = $1 AND checksum = $2 LIMIT 1',
+    [request.userId, validated.checksum],
+  );
+  return {
+    checksum: validated.checksum,
+    alreadyImported: previous.rowCount !== 0,
+    currencyCode: requestParsed.data.currencyCode,
+    counts: {
+      accounts: validated.backup.accounts.length,
+      categories: validated.backup.categories.length,
+      transactions: validated.backup.transactions.length,
+      transfers: validated.backup.transfers.length,
+    },
+  };
+});
+
+app.post('/v1/import/backup', {
+  preHandler: authenticate,
+  config: { rateLimit: { max: 3, timeWindow: '15 minutes' } },
+}, async (request: AuthenticatedRequest, reply) => {
+  const requestParsed = backupRequestSchema.extend({ confirm: z.literal(true) }).strict().safeParse(request.body);
+  if (!requestParsed.success) return reply.code(400).send({ error: 'explicit_confirmation_required' });
+  let validated: ReturnType<typeof validateBackup>;
+  try {
+    validated = validateBackup(requestParsed.data.backupJson);
+  } catch (error) {
+    if (error instanceof Error && 'statusCode' in error) return reply.code(400).send({ error: error.message });
+    throw error;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const previous = await client.query(
+      'SELECT counts FROM backup_imports WHERE user_id = $1 AND checksum = $2 FOR UPDATE',
+      [request.userId, validated.checksum],
+    );
+    if (previous.rowCount) {
+      await client.query('ROLLBACK');
+      return reply.code(409).send({ error: 'backup_already_imported' });
+    }
+
+    const accountMap = new Map<number, string>();
+    const categoryMap = new Map<number, string>();
+    const transactionMap = new Map<number, string>();
+    const transferMap = new Map<number, string>();
+    const { backup } = validated;
+    const userId = request.userId!;
+
+    for (const account of backup.accounts) {
+      const syncId = randomUUID();
+      const balanceMinor = account.initial_balance_minor ?? Math.round(account.initial_balance * 100);
+      await client.query(
+        `INSERT INTO accounts
+         (sync_id, user_id, name, type, initial_balance_minor, currency_code, is_archived, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
+        [syncId, userId, account.name, account.type, balanceMinor, requestParsed.data.currencyCode,
+         account.is_archived === true || account.is_archived === 1, account.created_at],
+      );
+      accountMap.set(account.id, syncId);
+      await client.query(
+        `INSERT INTO local_entity_mappings (user_id, entity_type, local_id, sync_id)
+         VALUES ($1, 'account', $2, $3)`,
+        [userId, String(account.id), syncId],
+      );
+    }
+
+    for (const category of backup.categories) {
+      const existing = await client.query<{ sync_id: string }>(
+        `SELECT sync_id FROM categories
+         WHERE name = $1 AND type = $2 AND deleted_at IS NULL
+           AND (is_system = TRUE OR user_id = $3)
+         ORDER BY is_system DESC LIMIT 1`,
+        [category.name, category.type, userId],
+      );
+      const syncId = existing.rows[0]?.sync_id ?? randomUUID();
+      if (!existing.rowCount) {
+        await client.query(
+          `INSERT INTO categories (sync_id, user_id, name, type, is_default, is_system)
+           VALUES ($1, $2, $3, $4, FALSE, FALSE)`,
+          [syncId, userId, category.name, category.type],
+        );
+      }
+      categoryMap.set(category.id, syncId);
+      await client.query(
+        `INSERT INTO local_entity_mappings (user_id, entity_type, local_id, sync_id)
+         VALUES ($1, 'category', $2, $3)`,
+        [userId, String(category.id), syncId],
+      );
+    }
+
+    for (const transaction of backup.transactions) {
+      const syncId = randomUUID();
+      const amountMinor = transaction.amount_minor ?? Math.round(transaction.amount * 100);
+      await client.query(
+        `INSERT INTO transactions
+         (sync_id, user_id, account_sync_id, category_sync_id, type, amount_minor, description, occurred_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
+        [syncId, userId, accountMap.get(transaction.account_id), categoryMap.get(transaction.category_id),
+         transaction.type, amountMinor, transaction.description ?? '', transaction.date,
+         transaction.created_at ?? transaction.date],
+      );
+      transactionMap.set(transaction.id, syncId);
+      await client.query(
+        `INSERT INTO local_entity_mappings (user_id, entity_type, local_id, sync_id)
+         VALUES ($1, 'transaction', $2, $3)`,
+        [userId, String(transaction.id), syncId],
+      );
+    }
+
+    for (const transfer of backup.transfers) {
+      const syncId = randomUUID();
+      const amountMinor = transfer.amount_minor ?? Math.round(transfer.amount * 100);
+      await client.query(
+        `INSERT INTO transfers
+         (sync_id, user_id, source_account_sync_id, destination_account_sync_id, amount_minor, description, occurred_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
+        [syncId, userId, accountMap.get(transfer.source_account_id), accountMap.get(transfer.destination_account_id),
+         amountMinor, transfer.description ?? '', transfer.date, transfer.created_at ?? transfer.date],
+      );
+      transferMap.set(transfer.id, syncId);
+      await client.query(
+        `INSERT INTO local_entity_mappings (user_id, entity_type, local_id, sync_id)
+         VALUES ($1, 'transfer', $2, $3)`,
+        [userId, String(transfer.id), syncId],
+      );
+    }
+
+    const counts = {
+      accounts: backup.accounts.length,
+      categories: backup.categories.length,
+      transactions: backup.transactions.length,
+      transfers: backup.transfers.length,
+    };
+    await client.query(
+      'INSERT INTO backup_imports (id, user_id, checksum, counts) VALUES ($1, $2, $3, $4::jsonb)',
+      [randomUUID(), userId, validated.checksum, JSON.stringify(counts)],
+    );
+    await client.query('COMMIT');
+    return reply.code(201).send({ imported: true, checksum: validated.checksum, counts });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+      return reply.code(409).send({ error: 'backup_already_imported_or_mapping_conflict' });
+    }
+    throw error;
+  } finally {
+    client.release();
   }
 });
 
