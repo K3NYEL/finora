@@ -37,7 +37,7 @@ class AuthRepository {
       salt: salt,
       iterations: _passwordHashIterations,
     );
-    return '${_passwordHashAlgorithm}\$${_passwordHashIterations}\$'
+    return '$_passwordHashAlgorithm\$$_passwordHashIterations\$'
         '${base64UrlEncode(salt)}\$'
         '${base64UrlEncode(hash)}';
   }
@@ -123,7 +123,7 @@ class AuthRepository {
   }
 
   bool _needsPasswordHashUpgrade(String storedHash) =>
-      !storedHash.startsWith('${_passwordHashAlgorithm}\$');
+      !storedHash.startsWith('$_passwordHashAlgorithm\$');
 
   String _generateUserId() => 'usr_${_uuid.v4().replaceAll('-', '')}';
 
