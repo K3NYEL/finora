@@ -2,8 +2,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import 'package:sqflite/sqflite.dart';
-
 import 'database.dart';
 import '../errors/app_exception.dart';
 
