@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/utils/amount_parser.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/async_state_view.dart';
 import '../../../../shared/widgets/movement_tile.dart';
@@ -123,8 +124,7 @@ class AccountsPage extends ConsumerWidget {
                     await ref.read(repoProvider).addAccount(
                           name.text,
                           type,
-                          double.tryParse(balance.text.replaceAll(',', '.')) ??
-                              0,
+                          parseAmount(balance.text) ?? 0,
                         );
                     refreshAccounts(ref);
                     if (ctx.mounted) Navigator.of(ctx).pop();
