@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -202,6 +203,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       if (!mounted || file == null) return;
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       if (bytes.length > 10 * 1024 * 1024) {
         throw const AppException('La copia supera el límite de 10 MB.');
       }
