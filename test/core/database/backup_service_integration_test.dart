@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -102,7 +101,12 @@ void main() {
       userId: destinationUser,
       jsonText: backup,
     );
-    expect(restored, {'accounts': 2, 'transactions': 1, 'transfers': 1, 'categories': 1});
+    expect(restored, {
+      'accounts': 2,
+      'transactions': 1,
+      'transfers': 1,
+      'categories': 1,
+    });
 
     final restoredAccounts = await db.query(
       'accounts',
@@ -121,8 +125,10 @@ void main() {
     );
     expect(restoredTransactions, hasLength(1));
     expect(restoredTransactions.single['amount_minor'], 10000);
-    expect(restoredTransactions.single['account_id'],
-        isNot(sourceAccount));
+    expect(
+      restoredTransactions.single['account_id'],
+      isNot(sourceAccount),
+    );
     expect(restoredTransactions.single['category_id'], categoryId);
 
     final restoredTransfers = await db.query(
@@ -132,10 +138,14 @@ void main() {
     );
     expect(restoredTransfers, hasLength(1));
     expect(restoredTransfers.single['amount_minor'], 2500);
-    expect(restoredTransfers.single['source_account_id'],
-        isNot(sourceAccount));
-    expect(restoredTransfers.single['destination_account_id'],
-        isNot(destinationAccount));
+    expect(
+      restoredTransfers.single['source_account_id'],
+      isNot(sourceAccount),
+    );
+    expect(
+      restoredTransfers.single['destination_account_id'],
+      isNot(destinationAccount),
+    );
 
     await expectLater(
       service.restoreBackup(userId: destinationUser, jsonText: backup),
