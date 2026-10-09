@@ -204,8 +204,7 @@ CREATE TABLE local_entity_mappings (
   local_id TEXT NOT NULL,
   sync_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, entity_type, local_id),
-  UNIQUE (user_id, entity_type, sync_id)
+  PRIMARY KEY (user_id, entity_type, local_id)
 );
 CREATE INDEX local_entity_mappings_sync_idx ON local_entity_mappings(user_id, sync_id);
 
