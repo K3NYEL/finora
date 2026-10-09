@@ -112,6 +112,13 @@ class BackupService {
       _requireString(row, 'type');
       _requireNumber(row, 'initial_balance');
       _requireString(row, 'created_at');
+      if ((row['initial_balance'] as num) < 0 ||
+          (row['initial_balance_minor'] is num &&
+              ((row['initial_balance_minor'] as num).toInt() < 0 ||
+                  (row['initial_balance_minor'] as num).toInt() !=
+                      (row['initial_balance'] as num).round() * 100))) {
+        throw const AppException('La copia contiene un balance inicial inválido.');
+      }
       if (!accountIds.add(row['id'] as int)) {
         throw const AppException('La copia contiene cuentas duplicadas.');
       }
@@ -121,10 +128,16 @@ class BackupService {
       _requireInt(row, 'id');
       _requireString(row, 'name');
       _requireString(row, 'type');
+      if (row['type'] != 'income' && row['type'] != 'expense') {
+        throw const AppException('La copia contiene una categoría inválida.');
+      }
       if (!categoryIds.add(row['id'] as int)) {
         throw const AppException('La copia contiene categorías duplicadas.');
       }
     }
+    final categoryTypes = <int, String>{
+      for (final row in categories) row['id'] as int: row['type'] as String,
+    };
     for (final row in transactions) {
       _requireInt(row, 'account_id');
       _requireInt(row, 'category_id');
@@ -140,7 +153,14 @@ class BackupService {
       if (row['type'] != 'income' && row['type'] != 'expense') {
         throw const AppException('La copia contiene un tipo de movimiento inválido.');
       }
-      if ((row['amount'] as num) <= 0) {
+      if (categoryTypes[row['category_id']] != row['type']) {
+        throw const AppException('La categoría no coincide con el tipo de movimiento.');
+      }
+      if ((row['amount'] as num) <= 0 ||
+          (row['amount_minor'] is num &&
+              ((row['amount_minor'] as num).toInt() <= 0 ||
+                  (row['amount_minor'] as num).toInt() !=
+                      ((row['amount'] as num) * 100).round()))) {
         throw const AppException('La copia contiene un monto inválido.');
       }
     }
@@ -152,7 +172,11 @@ class BackupService {
       if (!accountIds.contains(row['source_account_id']) ||
           !accountIds.contains(row['destination_account_id']) ||
           row['source_account_id'] == row['destination_account_id'] ||
-          (row['amount'] as num) <= 0) {
+          (row['amount'] as num) <= 0 ||
+          (row['amount_minor'] is num &&
+              ((row['amount_minor'] as num).toInt() <= 0 ||
+                  (row['amount_minor'] as num).toInt() !=
+                      ((row['amount'] as num) * 100).round()))) {
         throw const AppException(
           'La copia contiene una transferencia inválida.',
         );
