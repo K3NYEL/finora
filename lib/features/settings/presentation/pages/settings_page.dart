@@ -208,10 +208,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(
-              confirmationController.text ==
-                  LegacyDataMigrationService.confirmationPhrase,
-            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Recuperar datos'),
           ),
         ],
