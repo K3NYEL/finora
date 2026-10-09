@@ -182,7 +182,7 @@ class FinanceRepository {
       FROM transfers tr JOIN accounts s ON s.id = tr.source_account_id
                         JOIN accounts d ON d.id = tr.destination_account_id
       WHERE tr.user_id = ?
-      ORDER BY date DESC LIMIT 200''');
+      ORDER BY date DESC LIMIT 200''', [userId, userId]);
     return [
       for (final r in rows)
         Movement(
