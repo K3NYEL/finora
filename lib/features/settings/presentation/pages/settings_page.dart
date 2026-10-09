@@ -217,7 +217,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.attach_money_rounded,
               title: 'Moneda',
-              subtitle: 'USD — Dólar estadounidense',
+              subtitle: 'DOP — Peso dominicano',
               onTap: () {
                 // Próximamente.
               },
