@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+# Cancel outdated runs when a newer commit arrives for the same PR or branch.
+concurrency:
+  group: flutter-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
