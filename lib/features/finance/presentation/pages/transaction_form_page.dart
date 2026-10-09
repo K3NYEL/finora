@@ -121,7 +121,7 @@ class _State extends ConsumerState<TransactionFormPage> {
             controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: Theme.of(context).textTheme.headlineMedium,
-            decoration: const InputDecoration(labelText: 'Monto (RD$)'),
+            decoration: const InputDecoration(labelText: 'Monto (RD\$)'),
           ),
           const SizedBox(height: 12),
           _drop(
