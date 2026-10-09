@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify, { type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyError, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -624,7 +624,7 @@ app.post('/v1/import/backup', {
   }
 });
 
-app.setErrorHandler((error, request, reply) => {
+app.setErrorHandler((error: FastifyError, request, reply) => {
   if (error.statusCode === 401) return reply.code(401).send({ error: 'unauthorized' });
   request.log.error({ err: error }, 'Unhandled API error');
   return reply.code(500).send({ error: 'internal_error' });
