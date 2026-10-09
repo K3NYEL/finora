@@ -1,0 +1,51 @@
+name: PostgreSQL API validation
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/workflows/server-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/server-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: finora_test
+          POSTGRES_USER: finora
+          POSTGRES_PASSWORD: finora_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finora -d finora_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: postgres://finora:finora_test_only@localhost:5432/finora_test
+      JWT_SECRET: ci-only-secret-not-for-production-00000000000000000000
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npm run migrate
+      - run: npm run test
