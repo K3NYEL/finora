@@ -353,7 +353,7 @@ const backupAccountSchema = z.object({
   type: z.string().min(1).max(40),
   initial_balance: z.number().finite(),
   initial_balance_minor: z.number().int().safe().nullable().optional(),
-  created_at: z.string().datetime({ offset: true }),
+  created_at: z.string().datetime({ offset: true, local: true }),
   is_archived: z.union([z.literal(0), z.literal(1), z.boolean()]).optional(),
 });
 const backupCategorySchema = z.object({
@@ -369,8 +369,8 @@ const backupTransactionSchema = z.object({
   amount: z.number().finite(),
   amount_minor: z.number().int().safe().nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
-  date: z.string().datetime({ offset: true }),
-  created_at: z.string().datetime({ offset: true }).optional(),
+  date: z.string().datetime({ offset: true, local: true }),
+  created_at: z.string().datetime({ offset: true, local: true }).optional(),
 });
 const backupTransferSchema = z.object({
   id: z.number().int().safe(),
@@ -395,6 +395,12 @@ const backupRequestSchema = z.object({
   currencyCode: z.string().regex(/^[A-Za-z]{3}$/).transform((value) => value.toUpperCase()),
 }).strict();
 type FinoraBackup = z.infer<typeof backupRootSchema>;
+
+function toPostgresTimestamp(value: string): string {
+  // Legacy SQLite backups store local ISO timestamps without an offset.
+  // Preserve their wall-clock value by treating offset-less values as UTC.
+  return /(?:Z|[+-]\\d{2}:\\d{2})$/.test(value) ? value : `${value}Z`;
+}
 
 function validateBackup(raw: string): { backup: FinoraBackup; checksum: string } {
   let decoded: unknown;
@@ -518,7 +524,7 @@ app.post('/v1/import/backup', {
          (sync_id, user_id, name, type, initial_balance_minor, currency_code, is_archived, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
         [syncId, userId, account.name, account.type, balanceMinor, requestParsed.data.currencyCode,
-         account.is_archived === true || account.is_archived === 1, account.created_at],
+         account.is_archived === true || account.is_archived === 1, toPostgresTimestamp(account.created_at)],
       );
       accountMap.set(account.id, syncId);
       await client.query(
@@ -579,7 +585,7 @@ app.post('/v1/import/backup', {
          (sync_id, user_id, source_account_sync_id, destination_account_sync_id, amount_minor, description, occurred_at, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
         [syncId, userId, accountMap.get(transfer.source_account_id), accountMap.get(transfer.destination_account_id),
-         amountMinor, transfer.description ?? '', transfer.date, transfer.created_at ?? transfer.date],
+         amountMinor, transfer.description ?? '', toPostgresTimestamp(transfer.date), toPostgresTimestamp(transfer.created_at ?? transfer.date)],
       );
       transferMap.set(transfer.id, syncId);
       await client.query(
