@@ -45,7 +45,10 @@ class AppShell extends StatelessWidget {
         child: Row(
           children: [
             if (isDesktop) _desktopNavigation(context, selectedIndex),
-            Expanded(child: _animatedContent(path, child)),
+            // GoRouter owns the page subtree and its GlobalKey. Keeping the
+            // previous route alive in AnimatedSwitcher can duplicate that key
+            // when the next ShellRoute child is mounted.
+            Expanded(child: child),
           ],
         ),
       ),
@@ -58,23 +61,6 @@ class AppShell extends StatelessWidget {
           isDesktop ? null : _mobileNavigation(context, selectedIndex),
     );
   }
-
-  Widget _animatedContent(String path, Widget child) => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (current, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.025),
-              end: Offset.zero,
-            ).animate(animation),
-            child: current,
-          ),
-        ),
-        child: child,
-      );
 
   Widget _mobileNavigation(BuildContext context, int selectedIndex) =>
       NavigationBar(

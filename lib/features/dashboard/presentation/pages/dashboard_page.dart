@@ -9,7 +9,6 @@ import '../../../../shared/widgets/finora_skeleton.dart';
 import '../../../finance/presentation/providers.dart';
 
 class DashboardStat extends StatelessWidget {
-  static const muted = TextStyle(color: AppColors.textSecondary);
   final String label;
   final double value;
   final Color color;
@@ -17,19 +16,30 @@ class DashboardStat extends StatelessWidget {
   const DashboardStat(this.label, this.value, this.color, {super.key});
 
   @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: muted),
-              Text(money(value),
-                  style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              money(value),
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class DashboardPage extends ConsumerWidget {
@@ -40,6 +50,10 @@ class DashboardPage extends ConsumerWidget {
     final accountsState = ref.watch(accountsProvider);
     final summaryState = ref.watch(summaryProvider);
     final movementsState = ref.watch(movementsProvider);
+    final theme = Theme.of(context);
+    final mutedStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -52,17 +66,12 @@ class DashboardPage extends ConsumerWidget {
                 children: [
                   Text(
                     'Finora',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Tu resumen financiero',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
+                  Text('Tu resumen financiero', style: mutedStyle),
                 ],
               ),
             ),
@@ -87,16 +96,26 @@ class DashboardPage extends ConsumerWidget {
           data: (summary) => Row(
             children: [
               Expanded(
-                  child: DashboardStat(
-                      'Ingresos', summary.income, AppColors.success)),
+                child: DashboardStat(
+                  'Ingresos',
+                  summary.income,
+                  theme.brightness == Brightness.dark
+                      ? AppColors.success
+                      : const Color(0xFF15803D),
+                ),
+              ),
               Expanded(
-                  child: DashboardStat(
-                      'Gastos', summary.expense, AppColors.error)),
+                child: DashboardStat(
+                  'Gastos',
+                  summary.expense,
+                  theme.colorScheme.error,
+                ),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        const Text('Cuentas', style: TextStyle(fontWeight: FontWeight.w600)),
+        Text('Cuentas', style: theme.textTheme.titleMedium),
         AsyncValueView(
           state: accountsState,
           onRetry: () => ref.invalidate(accountsProvider),
@@ -109,8 +128,10 @@ class DashboardPage extends ConsumerWidget {
             ],
           ),
           data: (accounts) => accounts.isEmpty
-              ? const Text('Crea tu primera cuenta en la pestaña Cuentas.',
-                  style: DashboardStat.muted)
+              ? Text(
+                  'Crea tu primera cuenta en la pestaña Cuentas.',
+                  style: mutedStyle,
+                )
               : Column(
                   children: [
                     for (final account in accounts)
@@ -123,8 +144,7 @@ class DashboardPage extends ConsumerWidget {
                 ),
         ),
         const SizedBox(height: 16),
-        const Text('Movimientos recientes',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+        Text('Movimientos recientes', style: theme.textTheme.titleMedium),
         AsyncValueView(
           state: movementsState,
           onRetry: () => ref.invalidate(movementsProvider),
@@ -139,8 +159,7 @@ class DashboardPage extends ConsumerWidget {
             ],
           ),
           data: (movements) => movements.isEmpty
-              ? const Text('Aún no hay movimientos.',
-                  style: DashboardStat.muted)
+              ? Text('Aún no hay movimientos.', style: mutedStyle)
               : Column(
                   children: [
                     for (final movement in movements.take(5))

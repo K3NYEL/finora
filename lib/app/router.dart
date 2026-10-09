@@ -16,6 +16,7 @@ import '../features/transactions/presentation/pages/transactions_page.dart';
 import '../shared/widgets/finora_skeleton.dart';
 import '../shared/widgets/update_dialog.dart';
 import 'router_refresh_notifier.dart';
+import 'settings_provider.dart';
 import 'shell/app_shell.dart';
 
 const _pageDuration = Duration(milliseconds: 320);
@@ -37,21 +38,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isSplashRoute = location == '/splash';
       final isPostLoginLoadingRoute = location == '/post-login-loading';
 
-      if (isSplashRoute) {
-        return null;
-      }
-
-      if (session == null && !isAuthRoute) {
-        return '/auth';
-      }
-
-      if (session != null && isAuthRoute) {
-        return '/';
-      }
-
-      if (session != null && isPostLoginLoadingRoute) {
-        return null;
-      }
+      if (isSplashRoute) return null;
+      if (session == null && !isAuthRoute) return '/auth';
+      if (session != null && isAuthRoute) return '/';
+      if (session != null && isPostLoginLoadingRoute) return null;
 
       return null;
     },
@@ -117,7 +107,9 @@ CustomTransitionPage<void> _page(
     child: child,
     transitionDuration: _pageDuration,
     reverseTransitionDuration: _pageDuration,
-    transitionsBuilder: (_, animation, __, child) {
+    transitionsBuilder: (context, animation, __, child) {
+      if (MediaQuery.disableAnimationsOf(context)) return child;
+
       return FadeTransition(
         opacity: CurvedAnimation(
           parent: animation,
@@ -191,10 +183,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (!mounted) return;
 
-      _redirectTimer = Timer(
-        Duration.zero,
-        () => context.go('/auth'),
-      );
+      _redirectTimer = Timer(Duration.zero, () => context.go('/auth'));
     } catch (e, stackTrace) {
       debugPrint('[FINORA] ERROR DURANTE INICIALIZACIÓN: $e');
       debugPrint('$stackTrace');
@@ -208,10 +197,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
       if (!mounted) return;
 
-      _redirectTimer = Timer(
-        Duration.zero,
-        () => context.go('/auth'),
-      );
+      _redirectTimer = Timer(Duration.zero, () => context.go('/auth'));
     }
   }
 
@@ -225,15 +211,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final animationsEnabled = ref.watch(settingsProvider).animationsEnabled;
+
+    if (animationsEnabled && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!animationsEnabled && _controller.isAnimating) {
+      _controller.stop();
+    }
 
     return Scaffold(
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, child) => Transform.scale(
-            scale: 0.96 + (_controller.value * 0.04),
-            child: child,
-          ),
+          builder: (context, child) {
+            if (!animationsEnabled) return child!;
+            return Transform.scale(
+              scale: 0.96 + (_controller.value * 0.04),
+              child: child,
+            );
+          },
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -262,14 +258,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
               ),
               const SizedBox(height: 26),
-              SizedBox(
-                width: 34,
-                height: 34,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
+              if (animationsEnabled)
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: theme.colorScheme.primary,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.more_horiz_rounded,
+                  size: 34,
                   color: theme.colorScheme.primary,
                 ),
-              ),
             ],
           ),
         ),

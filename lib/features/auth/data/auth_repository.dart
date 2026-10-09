@@ -85,6 +85,22 @@ class AuthRepository {
 
     final database = await _db;
 
+    // Login identifies local users by first and last name. Prevent duplicates
+    // here, otherwise two users with the same name could not log in reliably.
+    final existingUsers = await database.query(
+      'users',
+      columns: ['id'],
+      where: 'LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)',
+      whereArgs: [cleanFirstName, cleanLastName],
+      limit: 1,
+    );
+    if (existingUsers.isNotEmpty) {
+      throw const AppException(
+        'Ya existe una cuenta con esos nombres y apellidos. '
+        'Usa otros datos para identificar tu cuenta.',
+      );
+    }
+
     final now = DateTime.now().toIso8601String();
     final userId = _generateUserId();
 
