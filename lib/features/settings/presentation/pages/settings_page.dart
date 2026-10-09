@@ -1,8 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -152,7 +149,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final jsonText = await const BackupService().createBackup(user.id);
       final now = DateTime.now();
       final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      final savedPath = await FilePicker.platform.saveFile(
+      final savedPath = await FilePicker.saveFile(
+        mimeType: 'application/json',
         dialogTitle: 'Guardar copia de seguridad de Finora',
         fileName: 'finora-backup-$stamp.json',
         type: FileType.custom,
@@ -161,7 +159,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
 
       if (!mounted) return;
-      if (savedPath != null || kIsWeb) {
+      if (savedPath != null) {
         await _showUpdateMessage(
           title: 'Copia preparada',
           message: 'La copia de seguridad se generó correctamente. Guárdala '
@@ -197,19 +195,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     setState(() => _dataOperationInProgress = true);
     try {
-      final picked = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         dialogTitle: 'Seleccionar copia de seguridad de Finora',
         type: FileType.custom,
         allowedExtensions: ['json'],
-        withData: true,
-        allowMultiple: false,
       );
-      if (!mounted || picked == null) return;
-      final file = picked.files.single;
-      final bytes = file.bytes;
-      if (bytes == null) {
-        throw const AppException('No se pudo leer el archivo seleccionado.');
-      }
+      if (!mounted || file == null) return;
+      final bytes = await file.readAsBytes();
       if (bytes.length > 10 * 1024 * 1024) {
         throw const AppException('La copia supera el límite de 10 MB.');
       }
