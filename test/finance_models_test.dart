@@ -20,6 +20,17 @@ void main() {
       expect(parseAmount('1.234,56'), 1234.56);
     });
 
+    test('parses thousands separators without decimals', () {
+      expect(parseAmount('1,234'), 1234);
+      expect(parseAmount('1.234'), 1234);
+      expect(parseAmount('1,234,567'), 1234567);
+      expect(parseAmount('1.234.567'), 1234567);
+    });
+
+    test('parses repeated separators with a final decimal fraction', () {
+      expect(parseAmount('1,234,56'), 1234.56);
+    });
+
     test('rejects empty and malformed values', () {
       expect(parseAmount(''), isNull);
       expect(parseAmount('abc'), isNull);
