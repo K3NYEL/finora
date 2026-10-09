@@ -7,11 +7,11 @@ const client = await pool.connect();
 
 try {
   await client.query('SELECT pg_advisory_lock($1)', [7219042601]);
-  const exists = await client.query<{ exists: boolean }>(
-    "SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists",
+  const exists = await client.query<{ migration_table_exists: boolean }>(
+    "SELECT to_regclass('public.schema_migrations') IS NOT NULL AS migration_table_exists",
   );
 
-  if (exists.rows[0]?.exists) {
+  if (exists.rows[0]?.migration_table_exists) {
     const applied = await client.query<{ version: string }>(
       'SELECT version FROM schema_migrations',
     );
