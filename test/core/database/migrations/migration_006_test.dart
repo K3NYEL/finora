@@ -110,5 +110,12 @@ void main() {
     expect(status['unassigned_accounts'], 1);
     expect(status['unassigned_transactions'], 2);
     expect(status['unassigned_transfers'], 2);
+
+    // Running the migration again must not duplicate tracking rows or change
+    // the ownership decision for ambiguous records.
+    await applyMigration006(db);
+    expect(await db.query('legacy_data_migration'), hasLength(1));
+    expect((await db.query('accounts', where: 'id = ?', whereArgs: [3])).single['user_id'], isNull);
+    expect((await db.query('transactions', where: 'id = ?', whereArgs: [2])).single['user_id'], isNull);
   });
 }
