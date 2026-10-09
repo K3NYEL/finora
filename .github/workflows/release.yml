@@ -21,6 +21,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure release tag points to main history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/main"; then
+            echo "ERROR: Release tags must point to a commit contained in main."
+            exit 1
+          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
