@@ -11,6 +11,8 @@ import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
 import '../../../../core/database/database.dart';
 import '../../../../core/database/backup_service.dart';
+import '../../../../core/network/finora_api_client.dart';
+import '../../../../core/network/providers.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/database/migrations/legacy_data_migration_service.dart';
 import '../../../finance/presentation/providers.dart';
@@ -270,6 +272,161 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await _showUpdateMessage(
         title: 'No se pudo restaurar',
         message: 'Ocurrió un error. No se completó la importación.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      if (mounted) setState(() => _dataOperationInProgress = false);
+    }
+  }
+
+  Future<void> _migrateBackupToCloud() async {
+    if (_dataOperationInProgress) return;
+    final remoteSession = ref.read(remoteAuthSessionProvider);
+    if (remoteSession == null) {
+      await _showUpdateMessage(
+        title: 'Inicia sesión en la nube',
+        message: 'Para migrar una copia, activa la cuenta en la nube desde el '
+            'inicio de sesión. Tus datos locales no se enviarán hasta que '
+            'selecciones una copia y confirmes la importación.',
+        icon: Icons.cloud_off_outlined,
+      );
+      return;
+    }
+
+    setState(() => _dataOperationInProgress = true);
+    try {
+      final file = await FilePicker.pickFile(
+        dialogTitle: 'Seleccionar copia de Finora para migrar',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (!mounted || file == null) return;
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      // The API enforces a 4 MB JSON payload limit.
+      if (bytes.length > 4 * 1024 * 1024) {
+        throw const AppException(
+          'La copia supera el límite de 4 MB permitido para la migración.',
+        );
+      }
+      final backupJson = utf8.decode(bytes, allowMalformed: false);
+      final api = ref.read(finoraApiClientProvider);
+      final preview = await api.previewBackup(
+        accessToken: remoteSession.accessToken,
+        backupJson: backupJson,
+        currencyCode: 'DOP',
+      );
+
+      if (!mounted) return;
+      if (preview.alreadyImported) {
+        await _showUpdateMessage(
+          title: 'Copia ya importada',
+          message: 'Esta copia ya fue importada en la cuenta en la nube. '
+              'No se enviaron registros nuevos.',
+          icon: Icons.info_outline_rounded,
+        );
+        return;
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Revisar migración a la nube'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Archivo: ${file.name}'),
+                const SizedBox(height: 12),
+                Text('Cuentas: ${preview.accounts}'),
+                Text('Categorías: ${preview.categories}'),
+                Text('Movimientos: ${preview.transactions}'),
+                Text('Transferencias: ${preview.transfers}'),
+                const SizedBox(height: 12),
+                Text('Moneda asignada: ${preview.currencyCode}'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Al confirmar, estos datos financieros se enviarán por '
+                  'HTTPS a la API de Finora y se importarán a la cuenta en '
+                  'la nube. La copia local y los datos actuales de este '
+                  'dispositivo no se borrarán ni se reemplazarán.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Comprueba que has elegido la copia correcta. Esta misma '
+                  'copia no se puede importar dos veces en la misma cuenta.',
+                  style: TextStyle(
+                    color: Theme.of(dialogContext).colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirmar migración'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      final result = await api.importBackup(
+        accessToken: remoteSession.accessToken,
+        backupJson: backupJson,
+        currencyCode: preview.currencyCode,
+        confirm: true,
+      );
+      if (!mounted) return;
+
+      final counts = result['counts'];
+      final importedAccounts = counts is Map ? counts['accounts'] : null;
+      final importedTransactions =
+          counts is Map ? counts['transactions'] : null;
+      final importedTransfers = counts is Map ? counts['transfers'] : null;
+      await _showUpdateMessage(
+        title: 'Migración completada',
+        message: 'La API confirmó la importación de '
+            '${importedAccounts ?? preview.accounts} cuentas, '
+            '${importedTransactions ?? preview.transactions} movimientos y '
+            '${importedTransfers ?? preview.transfers} transferencias. '
+            'Los datos locales se conservaron sin cambios.',
+        icon: Icons.cloud_done_outlined,
+      );
+    } on FinoraApiException catch (error) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo migrar la copia',
+        message: error.message,
+        icon: Icons.cloud_off_outlined,
+      );
+    } on AppException catch (error) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo leer la copia',
+        message: error.message,
+        icon: Icons.error_outline_rounded,
+      );
+    } on FormatException {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Archivo no válido',
+        message: 'El archivo no contiene texto UTF-8 válido.',
+        icon: Icons.error_outline_rounded,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo migrar la copia',
+        message: 'Ocurrió un error inesperado. No se confirmó la importación.',
         icon: Icons.error_outline_rounded,
       );
     } finally {
@@ -581,6 +738,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ? 'Preparando operación...'
                   : 'Importar una copia JSON sin borrar los datos actuales',
               onTap: _dataOperationInProgress ? null : _restoreData,
+            ),
+            _SettingsTile(
+              icon: Icons.cloud_upload_outlined,
+              title: 'Migrar copia a la nube',
+              subtitle: _dataOperationInProgress
+                  ? 'Preparando operación...'
+                  : ref.watch(remoteAuthSessionProvider) == null
+                      ? 'Requiere una sesión de cuenta en la nube'
+                      : 'Previsualizar e importar una copia a tu cuenta remota',
+              onTap: _dataOperationInProgress ? null : _migrateBackupToCloud,
             ),
             _SettingsTile(
               icon: Icons.history_rounded,
