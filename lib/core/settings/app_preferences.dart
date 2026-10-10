@@ -8,7 +8,6 @@ class AppPreferences {
   static const _animationsKey = 'animations_enabled';
   static const _currencyKey = 'finance_currency';
   static const _autoBackupFrequencyKey = 'auto_backup_frequency';
-  static const _autoBackupLastAtKey = 'auto_backup_last_at';
 
   static Future<String> getAutoBackupFrequency() async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,15 +23,25 @@ class AppPreferences {
     await prefs.setString(_autoBackupFrequencyKey, value);
   }
 
-  static Future<DateTime?> getLastAutoBackupAt() async {
-    final prefs = await SharedPreferences.getInstance();
-    final value = prefs.getString(_autoBackupLastAtKey);
-    return value == null ? null : DateTime.tryParse(value);
+  static String _autoBackupLastAtKey(String userId) {
+    if (userId.trim().isEmpty) {
+      throw ArgumentError.value(userId, 'userId', 'El usuario no puede estar vacío');
+    }
+    return 'auto_backup_last_at:${Uri.encodeComponent(userId)}';
   }
 
-  static Future<void> setLastAutoBackupAt(DateTime value) async {
+  static Future<DateTime?> getLastAutoBackupAt(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_autoBackupLastAtKey, value.toUtc().toIso8601String());
+    final value = prefs.getString(_autoBackupLastAtKey(userId));
+    return value == null ? null : DateTime.tryParse(value)?.toUtc();
+  }
+
+  static Future<void> setLastAutoBackupAt(String userId, DateTime value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _autoBackupLastAtKey(userId),
+      value.toUtc().toIso8601String(),
+    );
   }
 
   static Future<String> getCurrency() async {
