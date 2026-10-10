@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../errors/app_exception.dart';
 import 'api_client.dart';
 
