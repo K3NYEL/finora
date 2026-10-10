@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../features/auth/presentation/session_provider.dart';
+import '../../../../core/database/database.dart';
+import '../../../../core/database/sync/sync_local_state_repository.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_config.dart';
 import '../../../../core/network/finora_remote_auth_api.dart';
 import '../../../../core/network/finora_remote_session_storage.dart';
 
-class CloudAccountPage extends StatefulWidget {
+class CloudAccountPage extends ConsumerStatefulWidget {
   const CloudAccountPage({super.key});
 
   @override
-  State<CloudAccountPage> createState() => _CloudAccountPageState();
+  ConsumerState<CloudAccountPage> createState() => _CloudAccountPageState();
 }
 
-class _CloudAccountPageState extends State<CloudAccountPage> {
+class _CloudAccountPageState extends ConsumerState<CloudAccountPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -25,6 +29,7 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   FinoraRemoteSession? _session;
   bool _loading = true;
   bool _submitting = false;
+  bool _previewLoading = false;
   bool _checkingConnection = false;
   String? _connectionStatus;
   bool _connectionSucceeded = false;
@@ -70,12 +75,15 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       final response = await api.getJson('/api/v1/health');
       if (response['status'] != 'ok' ||
           response['service'] != 'finora-database-api') {
-        throw const AppException('El servidor respondió, pero no se identificó como la API esperada de Finora.');
+        throw const AppException(
+          'El servidor respondió, pero no se identificó como la API esperada de Finora.',
+        );
       }
       if (!mounted) return;
       setState(() {
         _connectionSucceeded = true;
-        _connectionStatus = 'API de Finora accesible. La sincronización financiera sigue desactivada.';
+        _connectionStatus =
+            'API de Finora accesible. La sincronización financiera sigue desactivada.';
       });
     } catch (error) {
       if (!mounted) return;
@@ -153,6 +161,118 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     } finally {
       api.close();
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+
+  Future<void> _showSyncPreview() async {
+    if (_previewLoading) return;
+    final localUser = ref.read(sessionProvider);
+    if (localUser == null) {
+      setState(() {
+        _statusMessage = 'Inicia sesión en tu perfil local para revisar la preparación de la sincronización.';
+        _statusIsError = true;
+      });
+      return;
+    }
+
+    setState(() => _previewLoading = true);
+    try {
+      final database = await AppDatabase.instance;
+      final preview = await SyncLocalStateRepository(database).previewForUser(localUser.id);
+      if (!mounted) return;
+      const labels = <String, String>{
+        'sync_disabled': 'La sincronización sigue desactivada.',
+        'local_account_not_linked': 'El perfil local todavía no está vinculado para sincronización.',
+        'remote_account_not_linked': 'Falta confirmar la identidad remota para sincronización.',
+        'legacy_ownership_unresolved': 'Hay registros antiguos sin propietario confirmado.',
+        'financial_amount_integrity_failed': 'Hay importes que necesitan revisión.',
+        'missing_sync_identity_accounts': 'Hay cuentas sin identidad estable de sincronización.',
+        'missing_sync_identity_categories': 'Hay categorías sin identidad estable de sincronización.',
+        'missing_sync_identity_transactions': 'Hay movimientos sin identidad estable de sincronización.',
+        'missing_sync_identity_transfers': 'Hay transferencias sin identidad estable de sincronización.',
+        'transaction_relationship_owner_mismatch': 'Hay movimientos con cuentas o categorías incompatibles.',
+        'transfer_relationship_owner_mismatch': 'Hay transferencias entre perfiles distintos o con cuentas no válidas.',
+        'shared_category_mapping_required': 'Falta resolver la correspondencia de categorías integradas.',
+      };
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Vista previa de sincronización'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Simulación local: solo se cuentan registros. No se envían datos, '
+                  'no se activa la sincronización y no se modifica el punto de control.',
+                ),
+                const SizedBox(height: 16),
+                for (final entry in preview.recordCounts.entries)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(switch (entry.key) {
+                          'accounts' => 'Cuentas',
+                          'categories' => 'Categorías propias',
+                          'transactions' => 'Movimientos',
+                          'transfers' => 'Transferencias',
+                          _ => entry.key,
+                        })),
+                        Text('${entry.value}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                const Divider(height: 24),
+                Text(
+                  preview.readiness.ready
+                      ? 'Estado: preparada para una revisión final'
+                      : 'Estado: bloqueada por requisitos pendientes',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: preview.readiness.ready
+                        ? Theme.of(dialogContext).colorScheme.primary
+                        : Theme.of(dialogContext).colorScheme.error,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text('Registros elegibles en esta simulación: ${preview.eligibleRecords}'),
+                if (preview.readiness.blockers.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  for (final blocker in preview.readiness.blockers)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(labels[blocker] ?? 'Requisito pendiente: $blocker')),
+                        ],
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = 'No se pudo generar la vista previa local. No se envió ningún dato.';
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _previewLoading = false);
     }
   }
 
@@ -274,11 +394,11 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                   const SizedBox(height: 16),
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(Icons.shield_outlined),
@@ -301,15 +421,23 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(
-                              onPressed: _checkingConnection ? null : _checkServerConnection,
+                              onPressed: _checkingConnection
+                                  ? null
+                                  : _checkServerConnection,
                               icon: _checkingConnection
                                   ? const SizedBox(
                                       width: 16,
                                       height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.wifi_tethering_rounded),
-                              label: Text(_checkingConnection ? 'Comprobando servidor…' : 'Probar conexión con la API'),
+                              label: Text(
+                                _checkingConnection
+                                    ? 'Comprobando servidor…'
+                                    : 'Probar conexión con la API',
+                              ),
                             ),
                           ),
                           if (_connectionStatus != null) ...[
@@ -318,8 +446,12 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Icon(
-                                  _connectionSucceeded ? Icons.check_circle_outline : Icons.info_outline,
-                                  color: _connectionSucceeded ? colors.primary : colors.error,
+                                  _connectionSucceeded
+                                      ? Icons.check_circle_outline
+                                      : Icons.info_outline,
+                                  color: _connectionSucceeded
+                                      ? colors.primary
+                                      : colors.error,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -446,6 +578,14 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     ),
                   ] else ...[
                     const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: _previewLoading ? null : _showSyncPreview,
+                      icon: _previewLoading
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.fact_check_outlined),
+                      label: Text(_previewLoading ? 'Revisando datos locales…' : 'Previsualizar sincronización'),
+                    ),
+                    const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: _submitting ? null : _unlinkAccount,
                       icon: const Icon(Icons.link_off_rounded),
