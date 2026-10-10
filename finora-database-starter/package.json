@@ -2,6 +2,7 @@
   "name": "finora-database-api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Initial API scaffold for Finora DataBase",
   "engines": {
     "node": ">=22"
