@@ -147,26 +147,6 @@ class SyncLocalStateRepository {
       blockers: List.unmodifiable(blockers),
     );
   }
-}
-
-
-/// Count-only synchronization preview. It never reads or returns financial
-/// values and never changes the checkpoint or sends a network request.
-class SyncDryRunPreview {
-  const SyncDryRunPreview({
-    required this.readiness,
-    required this.recordCounts,
-  });
-
-  final SyncReadiness readiness;
-  final Map<String, int> recordCounts;
-
-  int get totalRecords =>
-      recordCounts.values.fold(0, (total, count) => total + count);
-
-  /// Be deliberately conservative: if any gate is blocked, the preview must
-  /// not describe any record as eligible for upload.
-  int get eligibleRecords => readiness.ready ? totalRecords : 0;
 
   /// Produces a count-only dry run for the selected local profile. This method
   /// does not enable sync, modify rows/checkpoints, or call the network.
@@ -195,5 +175,25 @@ class SyncDryRunPreview {
       recordCounts: Map.unmodifiable(counts),
     );
   }
+
+}
+
+/// Count-only synchronization preview. It never reads or returns financial
+/// values and never changes the checkpoint or sends a network request.
+class SyncDryRunPreview {
+  const SyncDryRunPreview({
+    required this.readiness,
+    required this.recordCounts,
+  });
+
+  final SyncReadiness readiness;
+  final Map<String, int> recordCounts;
+
+  int get totalRecords =>
+      recordCounts.values.fold(0, (total, count) => total + count);
+
+  /// Be deliberately conservative: if any gate is blocked, the preview must
+  /// not describe any record as eligible for upload.
+  int get eligibleRecords => readiness.ready ? totalRecords : 0;
 
 }
