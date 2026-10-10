@@ -13,6 +13,22 @@ void main() {
       );
     });
 
+    test('rejects oversized input at the service boundary', () async {
+      final chunk = List<String>.filled(8192, ' ').join();
+      final buffer = StringBuffer();
+      while (buffer.length <= BackupService.maxBackupBytes) {
+        buffer.write(chunk);
+      }
+
+      await expectLater(
+        service.restoreBackup(
+          userId: 'user-1',
+          jsonText: buffer.toString(),
+        ),
+        throwsA(isA<AppException>()),
+      );
+    });
+
     test('rejects an unknown backup format', () async {
       await expectLater(
         service.restoreBackup(
