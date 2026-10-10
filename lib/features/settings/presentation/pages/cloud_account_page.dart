@@ -394,11 +394,11 @@ class _CloudAccountPageState extends ConsumerState<CloudAccountPage> {
                   const SizedBox(height: 16),
                   Card(
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          const Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(Icons.shield_outlined),
@@ -411,8 +411,8 @@ class _CloudAccountPageState extends ConsumerState<CloudAccountPage> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 8),
-                          Text(
+                          const SizedBox(height: 8),
+                          const Text(
                             'Esta pantalla solo inicia sesión y guarda la sesión remota de forma segura. '
                             'No copia cuentas, categorías, presupuestos ni movimientos. La sincronización '
                             'seguirá desactivada hasta completar y probar esa función por separado.',
