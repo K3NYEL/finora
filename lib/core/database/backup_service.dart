@@ -20,58 +20,58 @@ class BackupService {
 
     final db = await AppDatabase.instance;
     return db.transaction((txn) async {
-    final accounts = await txn.query(
-      'accounts',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
-    final transactions = await txn.query(
-      'transactions',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
-    final transfers = await txn.query(
-      'transfers',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
+        final accounts = await txn.query(
+          'accounts',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
+        final transactions = await txn.query(
+          'transactions',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
+        final transfers = await txn.query(
+          'transfers',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
 
-    final categoryIds = <int>{};
-    for (final row in transactions) {
-      final id = row['category_id'];
-      if (id is int) categoryIds.add(id);
-    }
+        final categoryIds = <int>{};
+        for (final row in transactions) {
+          final id = row['category_id'];
+          if (id is int) categoryIds.add(id);
+        }
 
-    final categories = <Map<String, Object?>>[];
-    for (final id in categoryIds) {
-      final rows = await txn.query(
-        'categories',
-        where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
-        whereArgs: [id, userId],
-        limit: 1,
-      );
-      if (rows.isNotEmpty) {
-        final row = rows.first;
-        categories.add({
-          'id': row['id'],
-          'name': row['name'],
-          'type': row['type'],
+        final categories = <Map<String, Object?>>[];
+        for (final id in categoryIds) {
+          final rows = await txn.query(
+            'categories',
+            where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
+            whereArgs: [id, userId],
+            limit: 1,
+          );
+          if (rows.isNotEmpty) {
+            final row = rows.first;
+            categories.add({
+              'id': row['id'],
+              'name': row['name'],
+              'type': row['type'],
+            });
+          }
+        }
+
+        return const JsonEncoder.withIndent('  ').convert({
+          'format': format,
+          'schema_version': schemaVersion,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'accounts': accounts.map(_safeAccount).toList(),
+          'categories': categories,
+          'transactions': transactions.map(_safeTransaction).toList(),
+          'transfers': transfers.map(_safeTransfer).toList(),
         });
-      }
-    }
-
-    return const JsonEncoder.withIndent('  ').convert({
-      'format': format,
-      'schema_version': schemaVersion,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-      'accounts': accounts.map(_safeAccount).toList(),
-      'categories': categories,
-      'transactions': transactions.map(_safeTransaction).toList(),
-      'transfers': transfers.map(_safeTransfer).toList(),
-    });
     });
   }
 
