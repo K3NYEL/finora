@@ -48,10 +48,11 @@ void main() {
   test('readiness gate blocks unresolved legacy ownership and shared-category mapping', () async {
     final db = await openFixture();
     addTearDown(db.close);
-    await db.insert('accounts', {'id': 2, 'user_id': null});
+    await db.insert('accounts', {'id': 3, 'user_id': null});
     await db.insert('transactions', {
       'id': 1,
       'user_id': 'local-a',
+      'account_id': 1,
       'category_id': 2,
     });
     await db.update('sync_state', {
