@@ -21,6 +21,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   final _confirmPasswordController = TextEditingController();
 
   AppUser? _rememberedUser;
+  bool _isLoadingRememberedUser = true;
 
   bool _isRegistering = false;
   bool _isLoading = false;
@@ -37,8 +38,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _loadRememberedUser() async {
-    final user =
-        await ref.read(sessionProvider.notifier).getRememberedUser();
+    AppUser? user;
+    try {
+      user = await ref.read(sessionProvider.notifier).getRememberedUser();
+    } catch (error, stackTrace) {
+      debugPrint('No se pudo cargar la cuenta recordada: $error');
+      debugPrint('STACK TRACE: $stackTrace');
+    }
 
     if (!mounted) return;
 
@@ -47,7 +53,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       _lastNameController.text = user.lastName;
     }
 
-    setState(() => _rememberedUser = user);
+    setState(() {
+      _rememberedUser = user;
+      _isLoadingRememberedUser = false;
+    });
   }
 
   @override
@@ -199,7 +208,12 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (_hasRememberedUser) ...[
+                  if (_isLoadingRememberedUser) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ] else if (_hasRememberedUser) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -343,7 +357,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     width: double.infinity,
                     height: 52,
                     child: FilledButton(
-                      onPressed: _isLoading ? null : _submit,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _submit,
                       child: _isLoading
                           ? const SizedBox(
                               width: 22,
@@ -360,11 +374,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   const SizedBox(height: 16),
                   if (_hasRememberedUser) ...[
                     TextButton(
-                      onPressed: _isLoading ? null : _changeAccount,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _changeAccount,
                       child: const Text('Usar otra cuenta'),
                     ),
                     TextButton(
-                      onPressed: _isLoading ? null : _toggleMode,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _toggleMode,
                       child: const Text('Crear una cuenta nueva'),
                     ),
                   ] else
