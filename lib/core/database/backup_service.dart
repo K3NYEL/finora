@@ -319,6 +319,32 @@ class BackupService {
     });
   }
 
+  /// Deletes only the signed-in user's financial records in one transaction.
+  /// Authentication, other users, global categories, and legacy unassigned data remain intact.
+  Future<Map<String, int>> deleteUserData(String userId) async {
+    if (userId.trim().isEmpty) {
+      throw const AppException('No se pudo identificar la cuenta actual.');
+    }
+    final db = await AppDatabase.instance;
+    return db.transaction((txn) async {
+      final transfers = await txn.delete('transfers', where: 'user_id = ?', whereArgs: [userId]);
+      final transactions = await txn.delete('transactions', where: 'user_id = ?', whereArgs: [userId]);
+      final accounts = await txn.delete('accounts', where: 'user_id = ?', whereArgs: [userId]);
+      final categories = await txn.delete(
+        'categories',
+        where: 'user_id = ? AND is_default = 0',
+        whereArgs: [userId],
+      );
+      await txn.delete('finora_backup_imports', where: 'user_id = ?', whereArgs: [userId]);
+      return {
+        'accounts': accounts,
+        'transactions': transactions,
+        'transfers': transfers,
+        'categories': categories,
+      };
+    });
+  }
+
   static Map<String, Object?> _safeAccount(Map<String, Object?> row) => {
         'id': row['id'],
         'name': row['name'],
