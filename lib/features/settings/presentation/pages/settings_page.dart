@@ -77,7 +77,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               subtitle: Text('Cambia el símbolo; no convierte los importes.'),
             ),
             for (final entry in const [
-              ('DOP', 'Peso dominicano', r'RD
+              ('DOP', 'Peso dominicano', r'RD$'),
               ('USD', 'Dólar estadounidense', r'USD$'),
               ('EUR', 'Euro', '€'),
             ])
