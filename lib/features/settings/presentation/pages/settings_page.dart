@@ -323,11 +323,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     itemBuilder: (context, index) {
                       final backup = backups[index];
                       final modified = backup.lastModifiedSync().toLocal();
-                      final date = modified.year.toString().padLeft(4, '0') +
-                          '-' + modified.month.toString().padLeft(2, '0') +
-                          '-' + modified.day.toString().padLeft(2, '0') +
-                          ' ' + modified.hour.toString().padLeft(2, '0') +
-                          ':' + modified.minute.toString().padLeft(2, '0');
+                      final date = '${modified.year.toString().padLeft(4, '0')}-'
+                          '${modified.month.toString().padLeft(2, '0')}-'
+                          '${modified.day.toString().padLeft(2, '0')} '
+                          '${modified.hour.toString().padLeft(2, '0')}:'
+                          '${modified.minute.toString().padLeft(2, '0')}';
                       return ListTile(
                         leading: const Icon(Icons.backup_outlined),
                         title: Text(
@@ -556,7 +556,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         return;
       }
 
-      confirmationController = TextEditingController();
+      final controller = TextEditingController();
+      confirmationController = controller;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
@@ -599,7 +600,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: confirmationController,
+                    controller: controller,
                     autofocus: true,
                     onChanged: (_) => setDialogState(() {}),
                     decoration: const InputDecoration(
@@ -616,7 +617,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 child: const Text('Cancelar'),
               ),
               FilledButton(
-                onPressed: confirmationController!.text ==
+                onPressed: controller.text ==
                         LegacyDataMigrationService.confirmationPhrase
                     ? () => Navigator.of(dialogContext).pop(true)
                     : null,
@@ -626,7 +627,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
       );
-      final confirmation = confirmationController!.text;
+      final confirmation = controller.text;
       if (confirmed != true || !mounted) return;
 
       loadingRoute = showDialog<void>(
