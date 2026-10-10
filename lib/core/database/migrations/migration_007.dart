@@ -17,7 +17,7 @@ Future<void> applyMigration007(Database database) async {
 
     // Built-in/shared categories have user_id IS NULL and must not acquire a
     // server identity; they are local templates, not user-owned remote data.
-    final where = table == 'categories' ? 'WHERE user_id IS NOT NULL' : '';
+    final where = table == 'categories' ? 'user_id IS NOT NULL' : '';
     final rows = await database.query(table, columns: ['id'], where: where.isEmpty ? null : where);
     for (final row in rows) {
       await database.update(
