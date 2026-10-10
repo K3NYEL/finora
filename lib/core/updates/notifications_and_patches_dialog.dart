@@ -5,14 +5,14 @@ import 'finora_updates_service.dart';
 import '../../shared/widgets/update_dialog.dart';
 
 class NotificationsAndPatchesDialog extends StatefulWidget {
-  const NotificationsAndPatchesDialog();
+  const NotificationsAndPatchesDialog({super.key});
 
   @override
   State<NotificationsAndPatchesDialog> createState() =>
       _NotificationsAndPatchesDialogState();
 }
 
-class NotificationsAndPatchesDialogState
+class _NotificationsAndPatchesDialogState
     extends State<NotificationsAndPatchesDialog> {
   late Future<FinoraUpdatesManifest> _manifestFuture;
 
