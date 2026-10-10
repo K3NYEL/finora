@@ -288,13 +288,13 @@ test('HTTP integration: auth, owner isolation, and confirmed idempotent backup i
     }],
     transfers: [],
   });
-  const invalidImport = await fetch(`${baseUrl}/v1/import/backup`, {
+  const invalidImport = await fetch(`${baseUrl}/v1/import/preview`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${owner.accessToken}`,
     },
-    body: JSON.stringify({ backupJson: invalidBackupJson, currencyCode: 'DOP', confirm: true }),
+    body: JSON.stringify({ backupJson: invalidBackupJson, currencyCode: 'DOP' }),
   });
   assert.equal(invalidImport.status, 400);
 
