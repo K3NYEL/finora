@@ -50,7 +50,8 @@ void main() {
     expect(state['id'], 1);
     expect(state['cursor'], 0);
     expect(state['enabled'], 0);
-    expect(state['local_user_id'], isNull);\n    expect(state['remote_user_id'], isNull);
+    expect(state['local_user_id'], isNull);
+    expect(state['remote_user_id'], isNull);
   });
 
   test('creates unique indexes and can persist a stable sync identity', () async {
