@@ -8,7 +8,6 @@ import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/async_state_view.dart';
 import '../../../../shared/widgets/movement_tile.dart';
 import '../../../../shared/widgets/finora_skeleton.dart';
-import '../../../../shared/widgets/finora_logo.dart';
 import '../../../auth/presentation/session_provider.dart';
 import '../providers.dart';
 
