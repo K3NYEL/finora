@@ -221,6 +221,63 @@ class FinanceRepository {
     });
   }
 
+  Future<void> addCategory(String name, String type) async {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty || normalizedName.length > 40) {
+      throw const AppException('El nombre debe tener entre 1 y 40 caracteres.');
+    }
+    if (type != 'income' && type != 'expense') {
+      throw const AppException('El tipo de categoría no es válido.');
+    }
+    final database = await _db;
+    final existing = await database.query(
+      'categories',
+      columns: ['id'],
+      where: '(user_id IS NULL OR user_id = ?) AND type = ? AND lower(name) = lower(?)',
+      whereArgs: [userId, type, normalizedName],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      throw const AppException('Ya existe una categoría con ese nombre.');
+    }
+    await database.insert('categories', {
+      'user_id': userId,
+      'name': normalizedName,
+      'type': type,
+      'is_default': 0,
+    });
+  }
+
+  Future<void> deleteCategory(int categoryId) async {
+    final database = await _db;
+    await database.transaction((txn) async {
+      final rows = await txn.query(
+        'categories',
+        columns: ['id', 'user_id'],
+        where: 'id = ?',
+        whereArgs: [categoryId],
+        limit: 1,
+      );
+      if (rows.isEmpty || rows.first['user_id'] != userId) {
+        throw const AppException('Solo puedes eliminar categorías creadas por ti.');
+      }
+      final used = Sqflite.firstIntValue(await txn.rawQuery(
+        'SELECT COUNT(*) FROM transactions WHERE category_id = ? AND user_id = ?',
+        [categoryId, userId],
+      )) ?? 0;
+      if (used > 0) {
+        throw const AppException(
+          'Esta categoría ya tiene movimientos. No se puede eliminar para conservar el historial.',
+        );
+      }
+      await txn.delete(
+        'categories',
+        where: 'id = ? AND user_id = ?',
+        whereArgs: [categoryId, userId],
+      );
+    });
+  }
+
   Future<List<Movement>> movements() async {
     final rows = await (await _db).rawQuery('''
       SELECT t.type AS kind, COALESCE(NULLIF(t.description, ''), c.name) AS title,
