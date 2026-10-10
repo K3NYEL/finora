@@ -7,13 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Existing release tag to build and attach APKs to (for example v0.5.18)"
+        description: "Existing release tag to build and attach APKs to (for example v0.5.19)"
         required: true
-        default: "v0.5.18"
+        default: "v0.5.19"
         type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: finora-release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-android:
@@ -33,9 +37,15 @@ jobs:
 
       - name: Ensure release tag points to main history
         shell: bash
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
-          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
+          RELEASE_TAG="$RELEASE_TAG_INPUT"
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Release tag must use the format vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
           git fetch origin main --no-tags
           git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           TAG_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
@@ -43,6 +53,11 @@ jobs:
             echo "ERROR: Release tags must point to a commit contained in main history."
             exit 1
           fi
+
+          # Build the exact commit referenced by the selected release tag, including
+          # workflow_dispatch runs started from a branch other than the tag.
+          git checkout --detach "$TAG_SHA"
+          echo "Building release tag $RELEASE_TAG at commit $TAG_SHA"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -113,6 +128,8 @@ jobs:
       - name: Extract and validate release version
         id: version
         shell: bash
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
           VERSION="$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
@@ -123,7 +140,7 @@ jobs:
             exit 1
           fi
 
-          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
+          RELEASE_TAG="$RELEASE_TAG_INPUT"
           TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$TAG_VERSION" != "$VERSION" ]; then
             echo "ERROR: Git tag v$TAG_VERSION does not match pubspec.yaml version $VERSION."
