@@ -5,6 +5,7 @@ import 'migrations/migration_003.dart';
 import 'migrations/migration_004.dart';
 import 'migrations/migration_005.dart';
 import 'migrations/migration_006.dart';
+import 'migrations/migration_007.dart';
 
 class AppDatabase {
   static Database? _db;
@@ -19,7 +20,7 @@ class AppDatabase {
     final path = join(await getDatabasesPath(), 'finora.db');
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onConfigure: (d) => d.execute('PRAGMA foreign_keys = ON'),
       onCreate: (d, _) async {
         await d.execute('''CREATE TABLE accounts(
@@ -60,6 +61,7 @@ class AppDatabase {
         await applyMigration004(d);
         await applyMigration005(d);
         await applyMigration006(d);
+        await applyMigration007(d);
       },
       onUpgrade: (d, oldVersion, newVersion) async {
         if (oldVersion < 2) await applyMigration002(d);
@@ -67,6 +69,7 @@ class AppDatabase {
         if (oldVersion < 4) await applyMigration004(d);
         if (oldVersion < 5) await applyMigration005(d);
         if (oldVersion < 6) await applyMigration006(d);
+        if (oldVersion < 7) await applyMigration007(d);
       },
     ).then((database) {
       _db = database;

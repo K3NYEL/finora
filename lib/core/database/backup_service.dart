@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:sqflite/sqflite.dart';
 
 import 'database.dart';
 import '../errors/app_exception.dart';
@@ -8,7 +9,15 @@ import '../errors/app_exception.dart';
 /// Versioned, user-scoped JSON backup. Credentials and password hashes are
 /// intentionally never exported.
 class BackupService {
-  const BackupService();
+  const BackupService({Future<Database> Function()? databaseProvider})
+      : _databaseProvider = databaseProvider;
+
+  final Future<Database> Function()? _databaseProvider;
+
+  static Future<Database> _defaultDatabaseProvider() => AppDatabase.instance;
+
+  Future<Database> _getDatabase() =>
+      (_databaseProvider ?? _defaultDatabaseProvider)();
 
   static const format = 'finora-backup';
   static const schemaVersion = 1;
@@ -19,7 +28,7 @@ class BackupService {
       throw const AppException('No se pudo identificar la cuenta actual.');
     }
 
-    final db = await AppDatabase.instance;
+    final db = await _getDatabase();
     return db.transaction((txn) async {
         final accounts = await txn.query(
           'accounts',
@@ -73,8 +82,7 @@ class BackupService {
           'transactions': transactions.map(_safeTransaction).toList(),
           'transfers': transfers.map(_safeTransfer).toList(),
         });
-        if (jsonText.length > maxBackupBytes ||
-            utf8.encode(jsonText).length > maxBackupBytes) {
+        if (utf8.encode(jsonText).length > maxBackupBytes) {
           throw const AppException('La copia supera el límite de 10 MB.');
         }
         return jsonText;
@@ -90,8 +98,7 @@ class BackupService {
     if (userId.trim().isEmpty) {
       throw const AppException('No se pudo identificar la cuenta actual.');
     }
-    if (jsonText.length > maxBackupBytes ||
-        utf8.encode(jsonText).length > maxBackupBytes) {
+    if (utf8.encode(jsonText).length > maxBackupBytes) {
       throw const AppException('La copia supera el límite de 10 MB.');
     }
 
@@ -198,7 +205,10 @@ class BackupService {
     }
 
     final checksum = sha256.convert(utf8.encode(jsonText)).toString();
-    final db = await AppDatabase.instance;
+    // Scope the primary-key value by user so the same backup can be restored
+    // independently by different local users. Recognize old unscoped checksums.
+    final scopedChecksum = '$userId:$checksum';
+    final db = await _getDatabase();
     return db.transaction((txn) async {
       await txn.execute('''
         CREATE TABLE IF NOT EXISTS finora_backup_imports(
@@ -209,8 +219,8 @@ class BackupService {
       ''');
       final previousImport = await txn.query(
         'finora_backup_imports',
-        where: 'checksum = ? AND user_id = ?',
-        whereArgs: [checksum, userId],
+        where: '(checksum = ? OR checksum = ?) AND user_id = ?',
+        whereArgs: [scopedChecksum, checksum, userId],
         limit: 1,
       );
       if (previousImport.isNotEmpty) {
@@ -305,7 +315,7 @@ class BackupService {
       }
 
       await txn.insert('finora_backup_imports', {
-        'checksum': checksum,
+        'checksum': scopedChecksum,
         'user_id': userId,
         'imported_at': DateTime.now().toUtc().toIso8601String(),
       });
