@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_config.dart';
 import '../../../../core/network/finora_remote_auth_api.dart';
@@ -87,7 +88,18 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
               username: _usernameController.text,
               password: _passwordController.text,
             );
-      await _sessionRepository.save(session);
+      try {
+        await _sessionRepository.save(session);
+      } catch (_) {
+        // If secure persistence fails, revoke the newly created server session
+        // where possible instead of leaving an unlinked token active.
+        try {
+          await api.logout(bearerToken: session.accessToken);
+        } catch (_) {
+          // The UI will report that secure linking failed; never expose details.
+        }
+        rethrow;
+      }
       if (!mounted) return;
       setState(() {
         _session = session;
@@ -98,7 +110,9 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _statusMessage = error.toString().replaceFirst('Exception: ', '');
+        _statusMessage = error is AppException
+            ? error.message
+            : 'No se pudo completar la vinculación. Comprueba la conexión e inténtalo de nuevo.';
         _statusIsError = true;
       });
     } finally {
