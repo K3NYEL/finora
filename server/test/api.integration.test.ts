@@ -224,7 +224,7 @@ test('HTTP integration: auth, owner isolation, and confirmed idempotent backup i
   assert.deepEqual(
     importedAccounts.filter((account) => account.name.startsWith('Migration ')).map((account) => ({
       name: account.name,
-      initialBalanceMinor: account.initialBalanceMinor,
+      initialBalanceMinor: Number(account.initialBalanceMinor),
       currencyCode: account.currencyCode,
       isArchived: account.isArchived,
     })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -255,7 +255,7 @@ test('HTTP integration: auth, owner isolation, and confirmed idempotent backup i
   }).transactions;
   assert.equal(importedTransactionsResponse.status, 200);
   assert.deepEqual(importedTransactions.map((transaction) => ({
-    amountMinor: transaction.amountMinor,
+    amountMinor: Number(transaction.amountMinor),
     description: transaction.description,
     type: transaction.type,
   })).sort((a, b) => a.description.localeCompare(b.description)), [
@@ -271,7 +271,7 @@ test('HTTP integration: auth, owner isolation, and confirmed idempotent backup i
   }).transfers;
   assert.equal(importedTransfersResponse.status, 200);
   assert.deepEqual(importedTransfers.map((transfer) => ({
-    amountMinor: transfer.amountMinor,
+    amountMinor: Number(transfer.amountMinor),
     description: transfer.description,
   })), [{ amountMinor: 1500, description: 'Migration test transfer' }]);
 
