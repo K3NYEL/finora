@@ -75,6 +75,68 @@ class FinoraRemoteAuthApi {
 
   final FinoraApiClient _client;
 
+  /// Creates a remote account. This method does not create/link a local profile
+  /// and does not persist the returned bearer token; the UI must request consent.
+  Future<FinoraRemoteSession> register({
+    required String username,
+    required String password,
+  }) async {
+    final normalizedUsername = username.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}
+    required String username,
+    required String password,
+  }) async {
+    if (username.trim().isEmpty || password.isEmpty) {
+      throw const AppException('Introduce el usuario y la contraseña de tu cuenta remota.');
+    }
+    final json = await _client.postJson(
+      '/api/v1/auth/login',
+      body: <String, Object?>{'username': username.trim(), 'password': password},
+    );
+    return FinoraRemoteSession.fromJson(json);
+  }
+
+  Future<FinoraRemoteUser> currentUser({required String bearerToken}) async {
+    if (bearerToken.trim().isEmpty) {
+      throw const AppException('Debes iniciar sesión en la cuenta remota.');
+    }
+    final json = await _client.getJson(
+      '/api/v1/auth/me',
+      bearerToken: bearerToken,
+    );
+    return FinoraRemoteUser.fromJson(json['user']);
+  }
+
+  Future<void> logout({required String bearerToken}) async {
+    if (bearerToken.trim().isEmpty) {
+      throw const AppException('Debes iniciar sesión en la cuenta remota.');
+    }
+    await _client.postJson(
+      '/api/v1/auth/logout',
+      body: const <String, Object?>{},
+      bearerToken: bearerToken,
+    );
+  }
+
+  void close() => _client.close();
+}
+).hasMatch(normalizedUsername) ||
+        password.length < 12 ||
+        password.length > 128) {
+      throw const AppException(
+        'El usuario debe tener entre 3 y 32 caracteres válidos y la contraseña entre 12 y 128 caracteres.',
+      );
+    }
+    final json = await _client.postJson(
+      '/api/v1/auth/register',
+      body: <String, Object?>{
+        'username': normalizedUsername,
+        'password': password,
+      },
+    );
+    return FinoraRemoteSession.fromJson(json);
+  }
+
   /// Authenticates an existing remote account. Does not create or link a local
   /// profile and does not persist the returned bearer token.
   Future<FinoraRemoteSession> login({
