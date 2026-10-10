@@ -13,9 +13,9 @@ void main() {
     final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
     await db.execute('CREATE TABLE accounts (id INTEGER PRIMARY KEY, user_id TEXT)');
     await db.execute('CREATE TABLE categories (id INTEGER PRIMARY KEY, user_id TEXT)');
-    await db.execute('CREATE TABLE transactions (id INTEGER PRIMARY KEY, user_id TEXT, category_id INTEGER)');
-    await db.execute('CREATE TABLE transfers (id INTEGER PRIMARY KEY, user_id TEXT)');
-    await db.insert('accounts', {'id': 1, 'user_id': 'local-a'});
+    await db.execute('CREATE TABLE transactions (id INTEGER PRIMARY KEY, user_id TEXT, account_id INTEGER, category_id INTEGER)');
+    await db.execute('CREATE TABLE transfers (id INTEGER PRIMARY KEY, user_id TEXT, source_account_id INTEGER, destination_account_id INTEGER)');
+    await db.insert('accounts', {'id': 1, 'user_id': 'local-a'});\n    await db.insert('accounts', {'id': 2, 'user_id': 'local-b'});
     await db.insert('categories', {'id': 1, 'user_id': 'local-a'});
     await db.insert('categories', {'id': 2, 'user_id': null});
     await applyMigration007(db);
