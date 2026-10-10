@@ -9,12 +9,15 @@ import '../errors/app_exception.dart';
 /// Versioned, user-scoped JSON backup. Credentials and password hashes are
 /// intentionally never exported.
 class BackupService {
-  BackupService({Future<Database> Function()? databaseProvider})
-      : _databaseProvider = databaseProvider ?? _defaultDatabaseProvider;
+  const BackupService({Future<Database> Function()? databaseProvider})
+      : _databaseProvider = databaseProvider;
 
-  final Future<Database> Function() _databaseProvider;
+  final Future<Database> Function()? _databaseProvider;
 
   static Future<Database> _defaultDatabaseProvider() => AppDatabase.instance;
+
+  Future<Database> _getDatabase() =>
+      (_databaseProvider ?? _defaultDatabaseProvider)();
 
   static const format = 'finora-backup';
   static const schemaVersion = 1;
@@ -25,7 +28,7 @@ class BackupService {
       throw const AppException('No se pudo identificar la cuenta actual.');
     }
 
-    final db = await _databaseProvider();
+    final db = await _getDatabase();
     return db.transaction((txn) async {
         final accounts = await txn.query(
           'accounts',
@@ -205,7 +208,7 @@ class BackupService {
     // Scope the primary-key value by user so the same backup can be restored
     // independently by different local users. Recognize old unscoped checksums.
     final scopedChecksum = '$userId:$checksum';
-    final db = await _databaseProvider();
+    final db = await _getDatabase();
     return db.transaction((txn) async {
       await txn.execute('''
         CREATE TABLE IF NOT EXISTS finora_backup_imports(
