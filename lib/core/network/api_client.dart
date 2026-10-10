@@ -7,7 +7,7 @@ import '../errors/app_exception.dart';
 import 'api_config.dart';
 
 /// JSON HTTP transport for Finora DataBase.
-/// Authentication and financial sync are deliberately not enabled yet.
+/// Financial sync remains opt-in and is never started by this transport.
 class FinoraApiClient {
   FinoraApiClient({http.Client? httpClient, Duration timeout = const Duration(seconds: 15)})
       : _http = httpClient ?? http.Client(),
@@ -18,14 +18,39 @@ class FinoraApiClient {
 
   bool get isConfigured => FinoraApiConfig.isConfigured;
 
-  Future<Map<String, dynamic>> getJson(String path) => _sendJson('GET', path);
+  Future<Map<String, dynamic>> getJson(String path, {String? bearerToken}) =>
+      _sendJson('GET', path, bearerToken: bearerToken);
 
-  Future<Map<String, dynamic>> postJson(String path, {required Map<String, Object?> body}) =>
-      _sendJson('POST', path, body: body);
+  Future<Map<String, dynamic>> postJson(
+    String path, {
+    required Map<String, Object?> body,
+    String? bearerToken,
+    String? idempotencyKey,
+  }) =>
+      _sendJson(
+        'POST',
+        path,
+        body: body,
+        bearerToken: bearerToken,
+        idempotencyKey: idempotencyKey,
+      );
 
-  Future<Map<String, dynamic>> _sendJson(String method, String path, {Map<String, Object?>? body}) async {
+  Future<Map<String, dynamic>> _sendJson(
+    String method,
+    String path, {
+    Map<String, Object?>? body,
+    String? bearerToken,
+    String? idempotencyKey,
+  }) async {
     if (!isConfigured) {
       throw const AppException('El servidor de Finora todavía no está configurado en esta instalación.');
+    }
+    if (bearerToken != null && !RegExp(r'^[A-Za-z0-9_-]{40,60}$').hasMatch(bearerToken)) {
+      throw const AppException('La sesión del servidor no tiene un formato válido.');
+    }
+    if (idempotencyKey != null &&
+        !RegExp(r'^[A-Za-z0-9._:-]{8,128}$').hasMatch(idempotencyKey)) {
+      throw const AppException('La clave de operación no tiene un formato válido.');
     }
 
     final baseUri = FinoraApiConfig.baseUri;
@@ -41,8 +66,6 @@ class FinoraApiClient {
 
     final normalizedPath = path.replaceFirst(RegExp(r'^/+'), '');
     final uri = baseUri.resolve(normalizedPath);
-    // Defense in depth: API paths must never redirect a request to another
-    // origin, even if URI resolution behavior or callers change in the future.
     if (uri.scheme != baseUri.scheme ||
         uri.host != baseUri.host ||
         uri.port != baseUri.port) {
@@ -54,7 +77,14 @@ class FinoraApiClient {
     }
 
     try {
-      final request = http.Request(method, uri)..headers['Accept'] = 'application/json';
+      final request = http.Request(method, uri)
+        ..headers['Accept'] = 'application/json';
+      if (bearerToken != null) {
+        request.headers['Authorization'] = 'Bearer $bearerToken';
+      }
+      if (idempotencyKey != null) {
+        request.headers['Idempotency-Key'] = idempotencyKey;
+      }
       if (body != null) {
         request.headers['Content-Type'] = 'application/json; charset=utf-8';
         request.body = jsonEncode(body);

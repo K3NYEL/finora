@@ -1143,6 +1143,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           title: 'Cuenta',
           children: [
             _SettingsTile(
+              icon: Icons.cloud_sync_outlined,
+              title: 'Vincular cuenta Finora',
+              subtitle: 'Conectar una cuenta remota para preparar la futura sincronización',
+              onTap: () => context.push('/settings/cloud-account'),
+            ),
+            _SettingsTile(
               icon: Icons.logout_rounded,
               title: 'Cerrar sesión',
               subtitle: 'Salir de tu cuenta en este dispositivo',

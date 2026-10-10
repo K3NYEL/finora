@@ -11,6 +11,7 @@ import '../features/auth/presentation/session_provider.dart';
 import '../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../features/finance/presentation/pages/transaction_form_page.dart';
 import '../features/settings/presentation/pages/settings_page.dart';
+import '../features/settings/presentation/pages/cloud_account_page.dart';
 import '../features/statistics/presentation/pages/statistics_page.dart';
 import '../features/transactions/presentation/pages/transactions_page.dart';
 import '../shared/widgets/finora_skeleton.dart';
@@ -82,6 +83,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/settings',
             builder: (_, __) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: '/settings/cloud-account',
+            builder: (_, __) => const CloudAccountPage(),
           ),
         ],
       ),
