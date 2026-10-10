@@ -359,10 +359,17 @@ class BackupService {
     double amount, {
     bool allowZero = false,
   }) {
+    if (!amount.isFinite || amount < 0 || amount > 90071992547409.91) {
+      return false;
+    }
+    final scaled = amount * 100;
+    final expected = scaled.round();
+    if ((scaled - expected).abs() > 0.000001) return false;
+
     final value = row[key];
     if (value == null) return true; // Legacy backups can omit minor units.
     if (value is! int || value < (allowZero ? 0 : 1)) return false;
-    return value == (amount * 100).round();
+    return value == expected;
   }
 
   static void _requireInt(Map<String, dynamic> row, String key) {
