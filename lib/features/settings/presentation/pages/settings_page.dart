@@ -196,6 +196,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
 
+  Future<File> _saveBackupFile(String jsonText) async {
+    final baseDirectory = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+    final backupDirectory =
+        Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
+    await backupDirectory.create(recursive: true);
+
+    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final file = File(p.join(backupDirectory.path, 'finora-backup-$stamp.json'));
+    await file.writeAsString(jsonText, encoding: utf8, flush: true);
+
+    // Keep only the five newest Finora backup files in this directory.
+    final backups = backupDirectory
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where((candidate) =>
+            p.basename(candidate.path).startsWith('finora-backup-') &&
+            p.basename(candidate.path).endsWith('.json'))
+        .toList();
+    backups.sort((a, b) =>
+        b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    for (final oldBackup in backups.skip(5)) {
+      await oldBackup.delete();
+    }
+    return file;
+  }
+
   Future<void> _backupData() async {
     if (_dataOperationInProgress) return;
     final user = ref.read(sessionProvider);
@@ -222,14 +249,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       loadingOpen = true;
       await Future<void>.delayed(Duration.zero);
       final jsonText = await const BackupService().createBackup(user.id);
-      final baseDirectory = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
-      final backupDirectory = Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
-      await backupDirectory.create(recursive: true);
-      final now = DateTime.now();
-      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-      final file = File(p.join(backupDirectory.path, 'finora-backup-$stamp.json'));
-      await file.writeAsString(jsonText, encoding: utf8, flush: true);
+      final file = await _saveBackupFile(jsonText);
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       loadingOpen = false;
@@ -303,8 +323,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           content: Text(
             'Se importarán los datos de "${file.name}" a la cuenta actual. '
             'Los datos existentes no se borrarán; las cuentas y movimientos '
-            'se agregarán a los que ya tienes. La misma copia no puede '
-            'restaurarse dos veces en esta cuenta.',
+            'se agregarán a los que ya tienes. Antes de importar, Finora '
+            'creará una copia preventiva de tus datos actuales. La misma '
+            'copia no puede restaurarse dos veces en esta cuenta.',
           ),
           actions: [
             TextButton(
@@ -330,6 +351,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       restoreLoadingOpen = true;
       await Future<void>.delayed(Duration.zero);
+
+      // Do not begin importing unless the current account's data has first
+      // been saved successfully. This protects against accidental merges
+      // and gives the user a rollback file if they selected the wrong copy.
+      final currentData = await const BackupService().createBackup(user.id);
+      final safetyFile = await _saveBackupFile(currentData);
+
       final counts = await const BackupService().restoreBackup(
         userId: user.id,
         jsonText: jsonText,
@@ -346,7 +374,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         message: 'Se importaron ${counts['accounts']} cuentas, '
             '${counts['transactions']} movimientos y '
             '${counts['transfers']} transferencias. '
-            'Tus datos anteriores se conservaron.',
+            'Tus datos anteriores se conservaron. Copia preventiva: '
+            '${p.basename(safetyFile.path)}.',
         icon: Icons.check_circle_outline_rounded,
       );
     } on AppException catch (error) {
