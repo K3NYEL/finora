@@ -222,7 +222,8 @@ void main() {
       final balances = await db.query('accounts', columns: ['initial_balance_minor']);
       expect(balances.map((row) => row['initial_balance_minor']).toSet(), {0, 1250});
       final amounts = await db.query('transactions', columns: ['amount_minor']);
-      expect(amounts.single['amount_minor'], 2000);
+      expect(amounts, hasLength(2));
+      expect(amounts.map((row) => row['amount_minor']).toSet(), {2000});
     });
 
     test('blocks repeated restore for one user without changing existing data', () async {
