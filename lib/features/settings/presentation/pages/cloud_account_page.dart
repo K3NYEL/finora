@@ -25,6 +25,9 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   FinoraRemoteSession? _session;
   bool _loading = true;
   bool _submitting = false;
+  bool _checkingConnection = false;
+  String? _connectionStatus;
+  bool _connectionSucceeded = false;
   bool _creatingAccount = false;
   bool _consentGiven = false;
   bool _obscurePassword = true;
@@ -53,6 +56,38 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
         _statusMessage = 'No se pudo leer la sesión segura de este dispositivo.';
         _statusIsError = true;
       });
+    }
+  }
+
+  Future<void> _checkServerConnection() async {
+    if (_checkingConnection) return;
+    setState(() {
+      _checkingConnection = true;
+      _connectionStatus = null;
+    });
+    final api = FinoraApiClient();
+    try {
+      final response = await api.getJson('/api/v1/health');
+      if (response['status'] != 'ok' ||
+          response['service'] != 'finora-database-api') {
+        throw const AppException('El servidor respondió, pero no se identificó como la API esperada de Finora.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _connectionSucceeded = true;
+        _connectionStatus = 'API de Finora accesible. La sincronización financiera sigue desactivada.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _connectionSucceeded = false;
+        _connectionStatus = error is AppException
+            ? error.message
+            : 'No se pudo verificar la conexión con la API.';
+      });
+    } finally {
+      api.close();
+      if (mounted) setState(() => _checkingConnection = false);
     }
   }
 
@@ -262,6 +297,36 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                             'No copia cuentas, categorías, presupuestos ni movimientos. La sincronización '
                             'seguirá desactivada hasta completar y probar esa función por separado.',
                           ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _checkingConnection ? null : _checkServerConnection,
+                              icon: _checkingConnection
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.wifi_tethering_rounded),
+                              label: Text(_checkingConnection ? 'Comprobando servidor…' : 'Probar conexión con la API'),
+                            ),
+                          ),
+                          if (_connectionStatus != null) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  _connectionSucceeded ? Icons.check_circle_outline : Icons.info_outline,
+                                  color: _connectionSucceeded ? colors.primary : colors.error,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(_connectionStatus!)),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
