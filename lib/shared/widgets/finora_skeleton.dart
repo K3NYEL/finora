@@ -201,25 +201,21 @@ class AccountsSkeleton extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
+        const Row(
           children: [
-            const Expanded(child: SkeletonText(width: 132, height: 24)),
-            SkeletonBox(
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-            ),
+            Expanded(child: SkeletonText(width: 132, height: 24)),
+            SkeletonBox(width: 42, height: 42, borderRadius: 14),
           ],
         ),
         const SizedBox(height: 18),
-        Card(
+        const Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: Row(
               children: [
-                const SkeletonBox(width: 54, height: 54, borderRadius: 27),
-                const SizedBox(width: 14),
-                const Expanded(
+                SkeletonBox(width: 54, height: 54, borderRadius: 27),
+                SizedBox(width: 14),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
