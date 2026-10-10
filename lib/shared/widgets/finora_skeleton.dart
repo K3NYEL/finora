@@ -200,15 +200,15 @@ class AccountsSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: [
-        const Row(
+      children: const [
+        Row(
           children: [
             Expanded(child: SkeletonText(width: 132, height: 24)),
             SkeletonBox(width: 42, height: 42, borderRadius: 14),
           ],
         ),
-        const SizedBox(height: 18),
-        const Card(
+        SizedBox(height: 18),
+        Card(
           child: Padding(
             padding: EdgeInsets.all(16),
             child: Row(
@@ -229,16 +229,16 @@ class AccountsSkeleton extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
-        const SkeletonCard(height: 76),
-        const SizedBox(height: 12),
-        const SkeletonCard(height: 76),
-        const SizedBox(height: 12),
-        const SkeletonCard(height: 76),
-        const SizedBox(height: 12),
-        const SkeletonCard(height: 76),
-        const SizedBox(height: 24),
-        const Row(
+        SizedBox(height: 18),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 24),
+        Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             SkeletonText(width: 64),
