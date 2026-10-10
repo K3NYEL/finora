@@ -9,7 +9,7 @@ class ReleaseInfo {
   final String tagName;
   final String name;
   final String body;
-  final Map<String, String> assets;
+  final Map<String, ReleaseAsset> assets;
 
   String get version =>
       tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -21,6 +21,20 @@ class ReleaseInfo {
 
     return int.tryParse(match?.group(1) ?? '') ?? 0;
   }
+}
+
+class ReleaseAsset {
+  const ReleaseAsset({
+    required this.name,
+    required this.downloadUrl,
+    required this.size,
+    required this.sha256,
+  });
+
+  final String name;
+  final String downloadUrl;
+  final int size;
+  final String? sha256;
 }
 
 class UpdateInfo {
@@ -52,11 +66,13 @@ class UpdateAsset {
     required this.name,
     required this.downloadUrl,
     required this.size,
+    required this.sha256,
   });
 
   final String name;
   final String downloadUrl;
   final int size;
+  final String? sha256;
 }
 
 class UpdateCheckException implements Exception {
