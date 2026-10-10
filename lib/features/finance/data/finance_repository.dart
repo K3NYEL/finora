@@ -105,8 +105,12 @@ class FinanceRepository {
     ];
   }
 
-  Future<void> _validateCategory(int id) async {
-    final rows = await (await _db).query(
+  Future<void> _validateCategory(
+    int id, {
+    DatabaseExecutor? executor,
+  }) async {
+    final database = executor ?? await _db;
+    final rows = await database.query(
       'categories',
       columns: ['id'],
       where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
@@ -118,8 +122,12 @@ class FinanceRepository {
     }
   }
 
-  Future<Account> _account(int id) async {
-    final rows = await (await _db).rawQuery(
+  Future<Account> _account(
+    int id, {
+    DatabaseExecutor? executor,
+  }) async {
+    final database = executor ?? await _db;
+    final rows = await database.rawQuery(
       '$_accountsSql AND a.id = ?',
       [userId, userId, userId, userId, id],
     );
@@ -158,22 +166,25 @@ class FinanceRepository {
     if (categoryId == null) {
       throw const AppException('Elige una categoría.');
     }
-    await _validateCategory(categoryId);
-    final acc = await _account(accountId);
-    if (type == 'expense' && acc.balance < amount) {
-      throw const AppException('Saldo insuficiente en esta cuenta.');
-    }
-    final now = DateTime.now().toIso8601String();
-    await (await _db).insert('transactions', {
-      'user_id': userId,
-      'account_id': accountId,
-      'category_id': categoryId,
-      'type': type,
-      'amount': amount,
-      'amount_minor': amountMinor,
-      'description': description.trim(),
-      'date': now,
-      'created_at': now,
+    final database = await _db;
+    await database.transaction((txn) async {
+      await _validateCategory(categoryId, executor: txn);
+      final acc = await _account(accountId, executor: txn);
+      if (type == 'expense' && acc.balance < amount) {
+        throw const AppException('Saldo insuficiente en esta cuenta.');
+      }
+      final now = DateTime.now().toIso8601String();
+      await txn.insert('transactions', {
+        'user_id': userId,
+        'account_id': accountId,
+        'category_id': categoryId,
+        'type': type,
+        'amount': amount,
+        'amount_minor': amountMinor,
+        'description': description.trim(),
+        'date': now,
+        'created_at': now,
+      });
     });
   }
 
@@ -189,21 +200,24 @@ class FinanceRepository {
     if (from == to) {
       throw const AppException('Elige dos cuentas diferentes.');
     }
-    final src = await _account(from);
-    await _account(to);
-    if (src.balance < amount) {
-      throw const AppException('Saldo insuficiente en la cuenta origen.');
-    }
-    final now = DateTime.now().toIso8601String();
-    await (await _db).insert('transfers', {
-      'user_id': userId,
-      'source_account_id': from,
-      'destination_account_id': to,
-      'amount': amount,
-      'amount_minor': amountMinor,
-      'description': description.trim(),
-      'date': now,
-      'created_at': now,
+    final database = await _db;
+    await database.transaction((txn) async {
+      final src = await _account(from, executor: txn);
+      await _account(to, executor: txn);
+      if (src.balance < amount) {
+        throw const AppException('Saldo insuficiente en la cuenta origen.');
+      }
+      final now = DateTime.now().toIso8601String();
+      await txn.insert('transfers', {
+        'user_id': userId,
+        'source_account_id': from,
+        'destination_account_id': to,
+        'amount': amount,
+        'amount_minor': amountMinor,
+        'description': description.trim(),
+        'date': now,
+        'created_at': now,
+      });
     });
   }
 
