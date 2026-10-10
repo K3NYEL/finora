@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Existing release tag to build and attach APKs to (for example v0.5.19)"
+        description: "Existing release tag to build and attach APKs to (for example v0.5.20)"
         required: true
-        default: "v0.5.19"
+        default: "v0.5.20"
         type: string
 
 permissions:
