@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -193,7 +194,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       loadingOpen = true;
       await Future<void>.delayed(Duration.zero);
       final jsonText = await const BackupService().createBackup(user.id);
-      final safetyFile = await _saveBackupFile(jsonText);
+      final safetyFile = await _saveBackupFile(jsonText, user.id);
       await closeLoading();
       if (!mounted) return;
 
@@ -373,7 +374,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
 
-  Future<File> _saveBackupFile(String jsonText) async {
+  Future<File> _saveBackupFile(String jsonText, String userId) async {
     final baseDirectory = await getDownloadsDirectory() ??
         await getApplicationDocumentsDirectory();
     final backupDirectory =
@@ -381,7 +382,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await backupDirectory.create(recursive: true);
 
     final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final file = File(p.join(backupDirectory.path, 'finora-backup-$stamp.json'));
+    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final file = File(p.join(backupDirectory.path, 'finora-backup-$userKey-$stamp.json'));
     await file.writeAsString(jsonText, encoding: utf8, flush: true);
 
     // Keep only the five newest Finora backup files in this directory.
@@ -389,7 +391,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         .listSync(followLinks: false)
         .whereType<File>()
         .where((candidate) =>
-            p.basename(candidate.path).startsWith('finora-backup-') &&
+            p.basename(candidate.path).startsWith('finora-backup-$userKey-') &&
             p.basename(candidate.path).endsWith('.json'))
         .toList();
     backups.sort((a, b) =>
@@ -426,7 +428,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       loadingOpen = true;
       await Future<void>.delayed(Duration.zero);
       final jsonText = await const BackupService().createBackup(user.id);
-      final file = await _saveBackupFile(jsonText);
+      final file = await _saveBackupFile(jsonText, user.id);
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       loadingOpen = false;
@@ -463,7 +465,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
   }
 
-  Future<List<File>> _findLocalBackups() async {
+  Future<List<File>> _findLocalBackups(String userId) async {
+    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
     final directory = await _getBackupDirectory();
     if (!await directory.exists()) return <File>[];
     final backups = directory
@@ -471,7 +474,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         .whereType<File>()
         .where((file) {
           final name = p.basename(file.path);
-          return name.startsWith('finora-backup-') && name.endsWith('.json');
+          return name.startsWith('finora-backup-$userKey-') &&
+              name.endsWith('.json');
         })
         .toList();
     backups.sort((a, b) =>
@@ -558,7 +562,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
     }
     try {
-      final localBackups = await _findLocalBackups();
+      final localBackups = await _findLocalBackups(user.id);
       if (!mounted) return;
       final selectedPath = await _chooseBackup(localBackups);
       if (!mounted || selectedPath == null) return;
@@ -625,7 +629,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       // been saved successfully. This protects against accidental merges
       // and gives the user a rollback file if they selected the wrong copy.
       final currentData = await const BackupService().createBackup(user.id);
-      final safetyFile = await _saveBackupFile(currentData);
+      final safetyFile = await _saveBackupFile(currentData, user.id);
 
       final counts = await const BackupService().restoreBackup(
         userId: user.id,
