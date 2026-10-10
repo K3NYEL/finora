@@ -147,4 +147,53 @@ class SyncLocalStateRepository {
       blockers: List.unmodifiable(blockers),
     );
   }
+
+  /// Produces a count-only dry run for the selected local profile. This method
+  /// does not enable sync, modify rows/checkpoints, or call the network.
+  Future<SyncDryRunPreview> previewForUser(String localUserId) async {
+    final readiness = await inspectForUser(localUserId);
+    if (localUserId.trim().isEmpty) {
+      return SyncDryRunPreview(readiness: readiness, recordCounts: const {});
+    }
+
+    Future<int> count(String table) async {
+      final rows = await database.rawQuery(
+        'SELECT COUNT(*) FROM $table WHERE user_id = ?',
+        [localUserId],
+      );
+      return Sqflite.firstIntValue(rows) ?? 0;
+    }
+
+    final counts = <String, int>{
+      'accounts': await count('accounts'),
+      'categories': await count('categories'),
+      'transactions': await count('transactions'),
+      'transfers': await count('transfers'),
+    };
+    return SyncDryRunPreview(
+      readiness: readiness,
+      recordCounts: Map.unmodifiable(counts),
+    );
+  }
+
+}
+
+/// Count-only synchronization preview. It never reads or returns financial
+/// values and never changes the checkpoint or sends a network request.
+class SyncDryRunPreview {
+  const SyncDryRunPreview({
+    required this.readiness,
+    required this.recordCounts,
+  });
+
+  final SyncReadiness readiness;
+  final Map<String, int> recordCounts;
+
+  int get totalRecords =>
+      recordCounts.values.fold(0, (total, count) => total + count);
+
+  /// Be deliberately conservative: if any gate is blocked, the preview must
+  /// not describe any record as eligible for upload.
+  int get eligibleRecords => readiness.ready ? totalRecords : 0;
+
 }
