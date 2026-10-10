@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/providers.dart';
 import '../../domain/user.dart';
+import '../../../../shared/widgets/finora_logo.dart';
 import '../session_provider.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -170,11 +171,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.account_balance_wallet_rounded,
-                    size: 64,
-                    color: colorScheme.primary,
-                  ),
+                  const FinoraLogo(size: 64),
                   const SizedBox(height: 20),
                   Text(
                     'Finora',

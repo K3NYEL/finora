@@ -269,7 +269,9 @@ class AccountsPage extends ConsumerWidget {
                           Text('ID de usuario', style: _muted(context)),
                           const SizedBox(height: 4),
                           SelectableText(
-                            user?.id ?? 'No disponible',
+                            user == null
+                                ? 'No disponible'
+                                : user.id.replaceFirst(RegExp(r'^usr_'), ''),
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   fontFamily: 'monospace',
                                 ),
@@ -282,7 +284,11 @@ class AccountsPage extends ConsumerWidget {
                         tooltip: 'Copiar ID',
                         visualDensity: VisualDensity.compact,
                         onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: user.id));
+                          await Clipboard.setData(
+                            ClipboardData(
+                              text: user.id.replaceFirst(RegExp(r'^usr_'), ''),
+                            ),
+                          );
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('ID copiado')),
