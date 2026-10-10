@@ -256,8 +256,8 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
+                          SizedBox(height: 8),
+                          Text(
                             'Esta pantalla solo inicia sesión y guarda la sesión remota de forma segura. '
                             'No copia cuentas, categorías, presupuestos ni movimientos. La sincronización '
                             'seguirá desactivada hasta completar y probar esa función por separado.',
