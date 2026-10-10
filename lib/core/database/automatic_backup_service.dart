@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -16,11 +19,14 @@ class AutomaticBackupService {
     if (frequency == 'disabled') return null;
 
     final now = DateTime.now().toUtc();
-    final last = await AppPreferences.getLastAutoBackupAt();
+    final last = await AppPreferences.getLastAutoBackupAt(userId);
     final interval = frequency == 'daily'
         ? const Duration(days: 1)
         : const Duration(days: 7);
-    if (last != null && now.difference(last) < interval) return null;
+    final elapsed = last == null ? null : now.difference(last);
+    if (elapsed != null && !elapsed.isNegative && elapsed < interval) {
+      return null;
+    }
 
     final jsonText = await const BackupService().createBackup(userId);
     final baseDirectory = await getDownloadsDirectory() ??
@@ -29,7 +35,8 @@ class AutomaticBackupService {
     await directory.create(recursive: true);
 
     final stamp = now.millisecondsSinceEpoch;
-    final file = File(p.join(directory.path, 'finora-backup-$stamp.json'));
+    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final file = File(p.join(directory.path, 'finora-backup-$userKey-$stamp.json'));
     final temporary = File('${file.path}.tmp');
     await temporary.writeAsString(jsonText, flush: true);
     await temporary.rename(file.path);
@@ -39,7 +46,8 @@ class AutomaticBackupService {
         .whereType<File>()
         .where((candidate) {
           final name = p.basename(candidate.path);
-          return name.startsWith('finora-backup-') && name.endsWith('.json');
+          return name.startsWith('finora-backup-$userKey-') &&
+              name.endsWith('.json');
         })
         .toList()
       ..sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
@@ -47,7 +55,7 @@ class AutomaticBackupService {
       await oldBackup.delete();
     }
 
-    await AppPreferences.setLastAutoBackupAt(now);
+    await AppPreferences.setLastAutoBackupAt(userId, now);
     return file;
   }
 }
