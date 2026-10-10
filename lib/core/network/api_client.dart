@@ -28,8 +28,27 @@ class FinoraApiClient {
       throw const AppException('El servidor de Finora todavía no está configurado en esta instalación.');
     }
 
+    final baseUri = FinoraApiConfig.baseUri;
+    final parsedPath = Uri.tryParse(path);
+    if (parsedPath == null ||
+        parsedPath.hasScheme ||
+        parsedPath.hasAuthority ||
+        path.startsWith('//') ||
+        parsedPath.path.isEmpty ||
+        parsedPath.pathSegments.contains('..')) {
+      throw const AppException('La ruta solicitada para la API no es válida.');
+    }
+
     final normalizedPath = path.replaceFirst(RegExp(r'^/+'), '');
-    final uri = FinoraApiConfig.baseUri.resolve(normalizedPath);
+    final uri = baseUri.resolve(normalizedPath);
+    // Defense in depth: API paths must never redirect a request to another
+    // origin, even if URI resolution behavior or callers change in the future.
+    if (uri.scheme != baseUri.scheme ||
+        uri.host != baseUri.host ||
+        uri.port != baseUri.port) {
+      throw const AppException('La ruta solicitada para la API no es válida.');
+    }
+
     if (uri.scheme != 'https' && !{'localhost', '127.0.0.1', '10.0.2.2'}.contains(uri.host)) {
       throw const AppException('La API debe utilizar HTTPS fuera del entorno local.');
     }
