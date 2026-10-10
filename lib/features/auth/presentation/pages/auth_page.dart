@@ -25,7 +25,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   AppUser? _rememberedUser;
 
   bool _isRegistering = false;
-  bool _useRemoteAuth = false;
+  final bool _useRemoteAuth = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
