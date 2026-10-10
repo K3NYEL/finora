@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
+import '../../../../shared/widgets/update_dialog.dart';
 import '../../../../core/database/database.dart';
 import '../../../../core/database/backup_service.dart';
 import '../../../../core/network/finora_api_client.dart';
