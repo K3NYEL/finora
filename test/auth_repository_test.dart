@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:finora/core/database/database.dart';
+import 'package:finora/core/errors/app_exception.dart';
 import 'package:finora/features/auth/data/auth_repository.dart';
 
 void main() {
@@ -58,6 +59,41 @@ void main() {
         where: 'id = ?',
         whereArgs: [created.id],
       );
+    }
+  });
+
+  test('login uses names and surnames, not the internal user id', () async {
+    final firstName = 'Case${DateTime.now().microsecondsSinceEpoch}';
+    const lastName = 'Regression';
+    const password = 'SecurePass123!';
+
+    final created = await repository.createUser(
+      firstName: firstName,
+      lastName: lastName,
+      password: password,
+    );
+
+    try {
+      final loggedIn = await repository.login(
+        firstName: '  ${firstName.toLowerCase()}  ',
+        lastName: '  regression  ',
+        password: password,
+      );
+
+      expect(loggedIn.id, created.id);
+      expect(loggedIn.fullName, '$firstName $lastName');
+      expect(loggedIn.fullName, isNot(contains(created.id)));
+
+      await expectLater(
+        repository.login(
+          firstName: firstName,
+          lastName: lastName,
+          password: 'WrongPassword123!',
+        ),
+        throwsA(isA<AppException>()),
+      );
+    } finally {
+      await database.delete('users', where: 'id = ?', whereArgs: [created.id]);
     }
   });
 
