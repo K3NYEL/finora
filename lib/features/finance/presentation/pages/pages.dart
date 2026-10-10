@@ -359,7 +359,7 @@ class StatisticsPage extends ConsumerWidget {
       );
     }
     if (summary.isLoading || categories.isLoading) {
-      return const AsyncStateView();
+      return const StatisticsSkeleton();
     }
 
     final s = summary.value;
