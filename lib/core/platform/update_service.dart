@@ -68,8 +68,8 @@ class UpdateService {
     } catch (e, stackTrace) {
       debugPrint('[FINORA UPDATE] Error inesperado: $e');
       debugPrint(stackTrace.toString());
-      throw UpdateCheckException(
-        'No se pudo comprobar la última release de Finora: $e',
+      throw const UpdateCheckException(
+        'No se pudo comprobar la última release de Finora.',
       );
     }
   }
@@ -80,11 +80,8 @@ class UpdateService {
     VoidCallback? onOpeningInstaller,
   }) async {
     final apk = update.apk;
-
     if (apk == null || apk.downloadUrl.isEmpty) {
-      debugPrint(
-        '[FINORA UPDATE] No hay APK disponible para este dispositivo.',
-      );
+      debugPrint('[FINORA UPDATE] No hay APK disponible para este dispositivo.');
       return ApkInstallResult.failed;
     }
 
@@ -96,17 +93,14 @@ class UpdateService {
   }
 
   static Future<UpdateAsset?> _selectApk(
-    Map<String, String> assets,
+    Map<String, ReleaseAsset> assets,
     String latestVersion,
   ) async {
-    final deviceInfo = DeviceInfoPlugin();
-    final androidInfo = await deviceInfo.androidInfo;
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
     final abis = androidInfo.supportedAbis;
-
     debugPrint('[FINORA UPDATE] ABIs del dispositivo: $abis');
 
     String? architecture;
-
     if (abis.contains('arm64-v8a')) {
       architecture = 'arm64-v8a';
     } else if (abis.contains('armeabi-v7a')) {
@@ -114,7 +108,6 @@ class UpdateService {
     } else if (abis.contains('x86_64')) {
       architecture = 'x86_64';
     }
-
     if (architecture == null) {
       debugPrint('[FINORA UPDATE] Arquitectura no compatible.');
       return null;
@@ -123,23 +116,26 @@ class UpdateService {
     final normalizedVersion = latestVersion.startsWith('v')
         ? latestVersion.substring(1)
         : latestVersion;
-
     final apkName = 'Finora_v${normalizedVersion}_$architecture.apk';
-    final downloadUrl = assets[apkName];
-
-    if (downloadUrl == null || downloadUrl.isEmpty) {
-      debugPrint(
-        '[FINORA UPDATE] GitHub Release no contiene $apkName',
-      );
+    final asset = assets[apkName];
+    if (asset == null) {
+      debugPrint('[FINORA UPDATE] GitHub Release no contiene $apkName');
       return null;
     }
 
-    debugPrint('[FINORA UPDATE] APK seleccionado: $apkName');
+    // Fail closed: do not install release assets without GitHub SHA-256 metadata.
+    if (asset.sha256 == null ||
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(asset.sha256!)) {
+      debugPrint('[FINORA UPDATE] GitHub no proporciona un SHA-256 válido para $apkName.');
+      return null;
+    }
 
+    debugPrint('[FINORA UPDATE] APK seleccionado con SHA-256 verificado: $apkName');
     return UpdateAsset(
-      name: apkName,
-      downloadUrl: downloadUrl,
-      size: 0,
+      name: asset.name,
+      downloadUrl: asset.downloadUrl,
+      size: asset.size,
+      sha256: asset.sha256,
     );
   }
 
@@ -161,26 +157,19 @@ class UpdateService {
   ) {
     final latest = _parseVersion(latestVersion);
     final current = _parseVersion(currentVersion);
-
     for (var i = 0; i < 3; i++) {
       if (latest[i] > current[i]) return true;
       if (latest[i] < current[i]) return false;
     }
-
     return latestBuild > currentBuild;
   }
 
   static List<int> _parseVersion(String version) {
     final clean = version.trim().replaceFirst('v', '');
     final parts = clean.split('.');
-
     return List.generate(3, (index) {
       if (index >= parts.length) return 0;
-
-      return int.tryParse(
-            parts[index].replaceAll(RegExp(r'[^0-9].*'), ''),
-          ) ??
-          0;
+      return int.tryParse(parts[index].replaceAll(RegExp(r'[^0-9].*'), '')) ?? 0;
     });
   }
 }
