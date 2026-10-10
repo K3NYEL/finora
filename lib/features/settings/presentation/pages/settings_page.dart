@@ -343,6 +343,103 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  Future<void> _showAboutFinora() async {
+    PackageInfo packageInfo;
+    try {
+      packageInfo = await PackageInfo.fromPlatform();
+    } catch (_) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Acerca de Finora',
+        message: 'No se pudo obtener la información de la versión instalada.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.auto_graph_rounded,
+              color: Theme.of(dialogContext).colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Finora')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Gestión financiera personal',
+                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Finora te ayuda a organizar tus cuentas, registrar ingresos y gastos, '
+                'consultar tus movimientos y revisar el estado de tus finanzas desde '
+                'una sola aplicación.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Funciones principales',
+                style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '• Cuentas y movimientos financieros\n'
+                '• Registro de ingresos, gastos y transferencias\n'
+                '• Resúmenes y estadísticas por categoría\n'
+                '• Copias de seguridad y restauración de datos\n'
+                '• Preferencias de apariencia y moneda',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Almacenamiento y privacidad',
+                style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Finora utiliza almacenamiento local para los datos financieros. '
+                'Las copias exportadas son archivos JSON legibles y no están cifradas; '
+                'guárdalas en una ubicación privada. La sincronización remota depende '
+                'de la configuración del servidor.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Versión ${packageInfo.version}',
+                style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              const Text('Desarrollada para ayudarte a llevar un mejor control de tu dinero.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showUpdateMessage({
     required String title,
     required String message,
@@ -1261,10 +1358,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.auto_graph_rounded,
               title: 'Acerca de Finora',
-              subtitle: 'Información sobre la aplicación',
-              onTap: () {
-                // Próximamente.
-              },
+              subtitle: 'Información, funciones y versión de la aplicación',
+              onTap: _showAboutFinora,
             ),
             _SettingsTile(
               icon: Icons.description_outlined,
