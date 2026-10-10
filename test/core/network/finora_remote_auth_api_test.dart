@@ -45,6 +45,39 @@ void main() {
       expect(session.isExpired, isFalse);
     });
 
+    test('rejects the legacy firstName/lastName API response contract', () {
+      expect(
+        () => FinoraRemoteSession.fromJson({
+          'user': {
+            'id': 'remote-user',
+            'firstName': 'Finora',
+            'lastName': 'User',
+            'loginIdentifier': 'finora_user',
+          },
+          'accessToken': List.filled(43, 'a').join(),
+          'tokenType': 'Bearer',
+          'expiresAt': '2099-01-01T00:00:00.000Z',
+        }),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('rejects non-Bearer token types from the API', () {
+      expect(
+        () => FinoraRemoteSession.fromJson({
+          'user': {
+            'id': 'remote-user',
+            'username': 'finora_user',
+            'createdAt': '2026-10-01T12:00:00.000Z',
+          },
+          'accessToken': List.filled(43, 'a').join(),
+          'tokenType': 'Basic',
+          'expiresAt': '2099-01-01T00:00:00.000Z',
+        }),
+        throwsA(isA<Exception>()),
+      );
+    });
+
     test('rejects malformed bearer tokens', () {
       expect(
         () => FinoraRemoteSession.fromJson({
