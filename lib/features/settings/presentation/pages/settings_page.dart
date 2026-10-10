@@ -280,6 +280,84 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  Future<Directory> _getBackupDirectory() async {
+    final baseDirectory = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+    return Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
+  }
+
+  Future<List<File>> _findLocalBackups() async {
+    final directory = await _getBackupDirectory();
+    if (!await directory.exists()) return <File>[];
+    final backups = directory
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where((file) {
+          final name = p.basename(file.path);
+          return name.startsWith('finora-backup-') && name.endsWith('.json');
+        })
+        .toList();
+    backups.sort((a, b) =>
+        b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return backups;
+  }
+
+  Future<String?> _chooseBackup(List<File> backups) {
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restaurar copia'),
+        content: SizedBox(
+          width: 460,
+          child: backups.isEmpty
+              ? const Text(
+                  'No se encontraron copias de Finora en la carpeta habitual. '
+                  'Puedes buscar una copia guardada en otra ubicación.',
+                )
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: backups.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final backup = backups[index];
+                      final modified = backup.lastModifiedSync().toLocal();
+                      final date = modified.year.toString().padLeft(4, '0') +
+                          '-' + modified.month.toString().padLeft(2, '0') +
+                          '-' + modified.day.toString().padLeft(2, '0') +
+                          ' ' + modified.hour.toString().padLeft(2, '0') +
+                          ':' + modified.minute.toString().padLeft(2, '0');
+                      return ListTile(
+                        leading: const Icon(Icons.backup_outlined),
+                        title: Text(
+                          p.basename(backup.path),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text('Última modificación: $date'),
+                        onTap: () =>
+                            Navigator.of(dialogContext).pop(backup.path),
+                      );
+                    },
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop('__external__'),
+            child: const Text('Buscar otro archivo…'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _restoreData() async {
     if (_dataOperationInProgress) return;
     final user = ref.read(sessionProvider);
@@ -303,13 +381,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
     }
     try {
-      final file = await FilePicker.pickFile(
-        dialogTitle: 'Seleccionar copia de seguridad de Finora',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
-      if (!mounted || file == null) return;
-      final bytes = await file.readAsBytes();
+      final localBackups = await _findLocalBackups();
+      if (!mounted) return;
+      final selectedPath = await _chooseBackup(localBackups);
+      if (!mounted || selectedPath == null) return;
+
+      Uint8List bytes;
+      String fileName;
+      if (selectedPath == '__external__') {
+        final externalFile = await FilePicker.pickFile(
+          dialogTitle: 'Seleccionar copia de seguridad de Finora',
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+        );
+        if (!mounted || externalFile == null) return;
+        bytes = await externalFile.readAsBytes();
+        fileName = externalFile.name;
+      } else {
+        final localFile = File(selectedPath);
+        bytes = await localFile.readAsBytes();
+        fileName = p.basename(localFile.path);
+      }
       if (!mounted) return;
       if (bytes.length > BackupService.maxBackupBytes) {
         throw const AppException('La copia supera el límite de 10 MB.');
@@ -321,7 +413,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Restaurar copia de seguridad'),
           content: Text(
-            'Se importarán los datos de "${file.name}" a la cuenta actual. '
+            'Se importarán los datos de "$fileName" a la cuenta actual. '
             'Los datos existentes no se borrarán; las cuentas y movimientos '
             'se agregarán a los que ya tienes. Antes de importar, Finora '
             'creará una copia preventiva de tus datos actuales. La misma '
