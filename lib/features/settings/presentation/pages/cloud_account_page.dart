@@ -237,13 +237,13 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Card(
+                  const Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(Icons.shield_outlined),
