@@ -82,8 +82,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final entry in const [
-                    ('DOP', 'Peso dominicano', r'RD
+                  RadioListTile<String>(
+                    value: 'DOP',
+                    title: const Text('Peso dominicano'),
+                    subtitle: const Text(r'RD$'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'USD',
+                    title: const Text('Dólar estadounidense'),
+                    subtitle: const Text(r'USD$'),
+                  ),
+                  const RadioListTile<String>(
+                    value: 'EUR',
+                    title: Text('Euro'),
+                    subtitle: Text('€'),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
