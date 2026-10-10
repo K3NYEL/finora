@@ -33,8 +33,7 @@ class FinoraRemoteUser {
   }
 }
 
-/// In-memory remote session data. This object must not be persisted directly;
-/// a platform-backed secure-storage implementation is required first.
+/// Remote session data. Persist it only through platform secure storage.
 class FinoraRemoteSession {
   const FinoraRemoteSession({
     required this.user,
@@ -75,52 +74,13 @@ class FinoraRemoteAuthApi {
 
   final FinoraApiClient _client;
 
-  /// Creates a remote account. This method does not create/link a local profile
-  /// and does not persist the returned bearer token; the UI must request consent.
+  /// Registers a remote account without linking it to a local profile.
   Future<FinoraRemoteSession> register({
     required String username,
     required String password,
   }) async {
     final normalizedUsername = username.trim().toLowerCase();
-    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}
-    required String username,
-    required String password,
-  }) async {
-    if (username.trim().isEmpty || password.isEmpty) {
-      throw const AppException('Introduce el usuario y la contraseña de tu cuenta remota.');
-    }
-    final json = await _client.postJson(
-      '/api/v1/auth/login',
-      body: <String, Object?>{'username': username.trim(), 'password': password},
-    );
-    return FinoraRemoteSession.fromJson(json);
-  }
-
-  Future<FinoraRemoteUser> currentUser({required String bearerToken}) async {
-    if (bearerToken.trim().isEmpty) {
-      throw const AppException('Debes iniciar sesión en la cuenta remota.');
-    }
-    final json = await _client.getJson(
-      '/api/v1/auth/me',
-      bearerToken: bearerToken,
-    );
-    return FinoraRemoteUser.fromJson(json['user']);
-  }
-
-  Future<void> logout({required String bearerToken}) async {
-    if (bearerToken.trim().isEmpty) {
-      throw const AppException('Debes iniciar sesión en la cuenta remota.');
-    }
-    await _client.postJson(
-      '/api/v1/auth/logout',
-      body: const <String, Object?>{},
-      bearerToken: bearerToken,
-    );
-  }
-
-  void close() => _client.close();
-}
-).hasMatch(normalizedUsername) ||
+    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}$').hasMatch(normalizedUsername) ||
         password.length < 12 ||
         password.length > 128) {
       throw const AppException(
@@ -137,18 +97,23 @@ class FinoraRemoteAuthApi {
     return FinoraRemoteSession.fromJson(json);
   }
 
-  /// Authenticates an existing remote account. Does not create or link a local
-  /// profile and does not persist the returned bearer token.
+  /// Authenticates an existing remote account without linking local data.
   Future<FinoraRemoteSession> login({
     required String username,
     required String password,
   }) async {
-    if (username.trim().isEmpty || password.isEmpty) {
-      throw const AppException('Introduce el usuario y la contraseña de tu cuenta remota.');
+    final normalizedUsername = username.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{2,31}$').hasMatch(normalizedUsername) ||
+        password.length < 12 ||
+        password.length > 128) {
+      throw const AppException('Introduce credenciales válidas para la cuenta remota.');
     }
     final json = await _client.postJson(
       '/api/v1/auth/login',
-      body: <String, Object?>{'username': username.trim(), 'password': password},
+      body: <String, Object?>{
+        'username': normalizedUsername,
+        'password': password,
+      },
     );
     return FinoraRemoteSession.fromJson(json);
   }
