@@ -1,7 +1,32 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:finora/core/network/api_client.dart';
 import 'package:finora/core/network/finora_remote_auth_api.dart';
 
 void main() {
+  group('FinoraRemoteAuthApi registration validation', () {
+    test('rejects usernames outside the server contract before networking', () async {
+      final client = FinoraApiClient();
+      final api = FinoraRemoteAuthApi(client);
+      addTearDown(client.close);
+
+      await expectLater(
+        api.register(username: 'x', password: 'correct-horse-battery'),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('rejects passwords shorter than the server contract before networking', () async {
+      final client = FinoraApiClient();
+      final api = FinoraRemoteAuthApi(client);
+      addTearDown(client.close);
+
+      await expectLater(
+        api.register(username: 'finora_user', password: 'short'),
+        throwsA(isA<Exception>()),
+      );
+    });
+  });
+
   group('FinoraRemoteSession', () {
     test('parses a valid in-memory session', () {
       final session = FinoraRemoteSession.fromJson({
