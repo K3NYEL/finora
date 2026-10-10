@@ -327,6 +327,13 @@ class BackupService {
     }
     final db = await AppDatabase.instance;
     return db.transaction((txn) async {
+      await txn.execute('''
+        CREATE TABLE IF NOT EXISTS finora_backup_imports(
+          checksum TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          imported_at TEXT NOT NULL
+        )
+      ''');
       final transfers = await txn.delete('transfers', where: 'user_id = ?', whereArgs: [userId]);
       final transactions = await txn.delete('transactions', where: 'user_id = ?', whereArgs: [userId]);
       final accounts = await txn.delete('accounts', where: 'user_id = ?', whereArgs: [userId]);
