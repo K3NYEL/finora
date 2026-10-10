@@ -1,7 +1,7 @@
 name: finora
 description: Gestión financiera personal, offline-first.
 publish_to: none
-version: 0.5.22+32
+version: 0.5.23+33
 environment:
   sdk: ^3.3.0
 dependencies:
