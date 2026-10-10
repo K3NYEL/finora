@@ -21,6 +21,12 @@ This document is the initial integration contract between the Flutter app and th
 - Use parameterized SQL queries and least-privilege database credentials.
 - Do not enable cross-device sync until account linking, conflict resolution, deletion semantics, and backup/restore behavior are specified and tested.
 
+## Starter scaffold status
+
+A minimal Node.js + TypeScript + Fastify scaffold is staged under `finora-database-starter/` in the current integration branch. It currently provides only a rate-limited health endpoint, generic errors, security headers, request-size/time limits, redacted logs, and an explicit CORS allowlist. It has no database, authentication, account routes, or financial sync.
+
+This folder is temporary staging inside the Finora integration PR because the connected GitHub tools cannot create a new repository. Before deployment, move the folder contents into a dedicated private repository named `Finora-DataBase`. Do not deploy this scaffold or treat it as production-ready.
+
 ## Proposed first endpoints
 
 | Method | Path | Purpose |
