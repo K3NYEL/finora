@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/app_exception.dart';
-import '../../../../core/network/finora_api_client.dart';
 import '../../../../core/network/providers.dart';
 import '../../domain/user.dart';
 import '../session_provider.dart';
@@ -18,14 +17,13 @@ class AuthPage extends ConsumerStatefulWidget {
 class _AuthPageState extends ConsumerState<AuthPage> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _loginIdentifierController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   AppUser? _rememberedUser;
+  bool _isLoadingRememberedUser = true;
 
   bool _isRegistering = false;
-  bool _useRemoteAuth = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -40,8 +38,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _loadRememberedUser() async {
-    final user =
-        await ref.read(sessionProvider.notifier).getRememberedUser();
+    AppUser? user;
+    try {
+      user = await ref.read(sessionProvider.notifier).getRememberedUser();
+    } catch (error, stackTrace) {
+      debugPrint('No se pudo cargar la cuenta recordada: $error');
+      debugPrint('STACK TRACE: $stackTrace');
+    }
 
     if (!mounted) return;
 
@@ -50,14 +53,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       _lastNameController.text = user.lastName;
     }
 
-    setState(() => _rememberedUser = user);
+    setState(() {
+      _rememberedUser = user;
+      _isLoadingRememberedUser = false;
+    });
   }
 
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _loginIdentifierController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -80,12 +85,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     setState(() => _isLoading = true);
 
     try {
-      if (_useRemoteAuth) {
-        await _submitRemote();
-        return;
-      }
-
-      ref.read(remoteAuthSessionProvider.notifier).state = null;
       final repository = ref.read(authRepositoryProvider);
 
       final user = _isRegistering
@@ -104,11 +103,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
       if (!mounted) return;
       context.go('/post-login-loading');
-    } on FinoraApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
     } on AppException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -129,93 +123,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _submitRemote() async {
-    final identifier = _loginIdentifierController.text.trim();
-    if (identifier.isEmpty) {
-      throw const AppException('Escribe tu identificador de cuenta.');
-    }
-
-    final password = _passwordController.text;
-    if (password.length < 12) {
-      throw const AppException(
-        'Para usar la cuenta en la nube, la contraseña debe tener al menos 12 caracteres.',
-      );
-    }
-
-    final api = ref.read(finoraApiClientProvider);
-    final repository = ref.read(authRepositoryProvider);
-    AppUser localUser;
-    late final FinoraApiSession remoteSession;
-
-    if (_isRegistering) {
-      // Create the local identity first so local finance data remains usable
-      // even if the remote API is temporarily unavailable.
-      localUser = await repository.createUser(
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-        password: password,
-      );
-      try {
-        remoteSession = await api.register(
-          firstName: _firstNameController.text,
-          lastName: _lastNameController.text,
-          loginIdentifier: identifier,
-          password: password,
-          passwordConfirmation: _confirmPasswordController.text,
-        );
-      } on FinoraApiException catch (error) {
-        ref.read(remoteAuthSessionProvider.notifier).state = null;
-        await ref.read(sessionProvider.notifier).setUser(localUser);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Cuenta local creada. No se pudo registrar la cuenta en la nube: ${error.message} '
-              'Puedes seguir usando Finora localmente.',
-            ),
-            duration: const Duration(seconds: 8),
-          ),
-        );
-        context.go('/post-login-loading');
-        return;
-      }
-    } else {
-      remoteSession = await api.login(
-        loginIdentifier: identifier,
-        password: password,
-      );
-
-      try {
-        localUser = await repository.login(
-          firstName: remoteSession.firstName,
-          lastName: remoteSession.lastName,
-          password: password,
-        );
-      } on AppException {
-        // A new local identity can be created only when no matching local
-        // identity exists. Existing local accounts with different credentials
-        // are never overwritten or merged implicitly.
-        try {
-          localUser = await repository.createUser(
-            firstName: remoteSession.firstName,
-            lastName: remoteSession.lastName,
-            password: password,
-          );
-        } on AppException {
-          throw const AppException(
-            'La cuenta en la nube se autenticó, pero no se pudo vincular con la cuenta local existente. '
-            'Tus datos locales no se modificaron.',
-          );
-        }
-      }
-    }
-
-    ref.read(remoteAuthSessionProvider.notifier).state = remoteSession;
-    await ref.read(sessionProvider.notifier).setUser(localUser);
-    if (!mounted) return;
-    context.go('/post-login-loading');
   }
 
   void _toggleMode() {
@@ -289,23 +196,24 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   ),
                   const SizedBox(height: 32),
                   if (ref.watch(finoraApiConfiguredProvider)) ...[
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: _useRemoteAuth,
-                      onChanged: _isLoading
-                          ? null
-                          : (value) => setState(() {
-                                _useRemoteAuth = value;
-                                _loginIdentifierController.clear();
-                              }),
-                      title: const Text('Usar cuenta en la nube'),
-                      subtitle: const Text(
-                        'Autenticación remota disponible; los datos financieros aún permanecen locales.',
+                    Align(
+                      alignment: Alignment.center,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : () => context.go('/settings/cloud-account'),
+                        icon: const Icon(Icons.cloud_sync_outlined),
+                        label: const Text('Vincular cuenta remota'),
                       ),
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (_hasRememberedUser && !_useRemoteAuth) ...[
+                  if (_isLoadingRememberedUser) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ] else if (_hasRememberedUser) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -360,28 +268,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       ),
                       onSubmitted: (_) => _submit(),
                     ),
-                  ] else if (_useRemoteAuth && !_isRegistering) ...[
-                    TextField(
-                      controller: _loginIdentifierController,
-                      keyboardType: TextInputType.emailAddress,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Identificador de cuenta',
-                        hintText: 'Usuario o correo registrado',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _PasswordField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      onToggle: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
-                      onSubmitted: (_) => _submit(),
-                    ),
                   ] else if (_isRegistering) ...[
                     TextField(
                       controller: _firstNameController,
@@ -403,21 +289,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (_useRemoteAuth) ...[
-                      TextField(
-                        controller: _loginIdentifierController,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Identificador de cuenta',
-                          hintText: 'Usuario o correo para la nube',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
                     _PasswordField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -486,7 +357,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     width: double.infinity,
                     height: 52,
                     child: FilledButton(
-                      onPressed: _isLoading ? null : _submit,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _submit,
                       child: _isLoading
                           ? const SizedBox(
                               width: 22,
@@ -503,11 +374,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   const SizedBox(height: 16),
                   if (_hasRememberedUser) ...[
                     TextButton(
-                      onPressed: _isLoading ? null : _changeAccount,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _changeAccount,
                       child: const Text('Usar otra cuenta'),
                     ),
                     TextButton(
-                      onPressed: _isLoading ? null : _toggleMode,
+                      onPressed: _isLoading || _isLoadingRememberedUser ? null : _toggleMode,
                       child: const Text('Crear una cuenta nueva'),
                     ),
                   ] else
