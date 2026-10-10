@@ -66,8 +66,15 @@ class FinoraApiClient {
     try {
       final decoded = jsonDecode(responseBody);
       if (decoded is Map<String, dynamic>) {
-        final message = decoded['message'];
-        if (message is String && message.trim().isNotEmpty && message.length <= 180) return message;
+        // Accept the documented { error: { message } } shape and the legacy
+        // top-level message shape, but never surface arbitrary server content.
+        final error = decoded['error'];
+        final nestedMessage = error is Map<String, dynamic> ? error['message'] : null;
+        final topLevelMessage = decoded['message'];
+        final message = nestedMessage is String ? nestedMessage : topLevelMessage;
+        if (message is String && message.trim().isNotEmpty && message.length <= 180) {
+          return message.trim();
+        }
       }
     } on FormatException {
       // Do not expose arbitrary HTML or server internals to the user.
