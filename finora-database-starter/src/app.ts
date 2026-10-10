@@ -52,12 +52,16 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.options("/*", async (_request, reply) => reply.code(204).send());
 
-  app.get("/api/v1/health", {
-    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
-  }, async () => ({
-    status: "ok",
-    service: "finora-database-api",
-  }));
+  app.get(
+    "/api/v1/health",
+    {
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async () => ({
+      status: "ok",
+      service: "finora-database-api",
+    }),
+  );
 
   app.setNotFoundHandler(async (_request, reply) => {
     return reply.code(404).send({
@@ -65,15 +69,26 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  app.setErrorHandler(async (error, request, reply) => {
+  app.setErrorHandler(async (error: unknown, request, reply) => {
     request.log.error({ err: error }, "Request failed");
-    const statusCode = error.statusCode && error.statusCode >= 400 && error.statusCode < 500
-      ? error.statusCode
-      : 500;
+    const possibleStatusCode =
+      typeof error === "object" && error !== null && "statusCode" in error
+        ? (error as { statusCode?: unknown }).statusCode
+        : undefined;
+    const statusCode =
+      typeof possibleStatusCode === "number" &&
+      possibleStatusCode >= 400 &&
+      possibleStatusCode < 500
+        ? possibleStatusCode
+        : 500;
+
     return reply.code(statusCode).send({
       error: {
         code: statusCode === 500 ? "INTERNAL_ERROR" : "BAD_REQUEST",
-        message: statusCode === 500 ? "An unexpected error occurred" : "Request could not be processed",
+        message:
+          statusCode === 500
+            ? "An unexpected error occurred"
+            : "Request could not be processed",
       },
     });
   });
