@@ -8,6 +8,7 @@ import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/async_state_view.dart';
 import '../../../../shared/widgets/movement_tile.dart';
 import '../../../../shared/widgets/finora_skeleton.dart';
+import '../../../../shared/widgets/finora_logo.dart';
 import '../../../auth/presentation/session_provider.dart';
 import '../providers.dart';
 
@@ -269,7 +270,9 @@ class AccountsPage extends ConsumerWidget {
                           Text('ID de usuario', style: _muted(context)),
                           const SizedBox(height: 4),
                           SelectableText(
-                            user?.id ?? 'No disponible',
+                            user == null
+                                ? 'No disponible'
+                                : user.id.replaceFirst(RegExp(r'^usr_'), ''),
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   fontFamily: 'monospace',
                                 ),
@@ -282,7 +285,11 @@ class AccountsPage extends ConsumerWidget {
                         tooltip: 'Copiar ID',
                         visualDensity: VisualDensity.compact,
                         onPressed: () async {
-                          await Clipboard.setData(ClipboardData(text: user.id));
+                          await Clipboard.setData(
+                            ClipboardData(
+                              text: user.id.replaceFirst(RegExp(r'^usr_'), ''),
+                            ),
+                          );
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('ID copiado')),
