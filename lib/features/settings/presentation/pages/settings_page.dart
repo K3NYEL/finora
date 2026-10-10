@@ -260,6 +260,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
 
     setState(() => _dataOperationInProgress = true);
+    var restoreLoadingOpen = false;
+    Future<void>? restoreLoadingRoute;
+    Future<void> closeRestoreLoading() async {
+      if (restoreLoadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        restoreLoadingOpen = false;
+        if (restoreLoadingRoute != null) await restoreLoadingRoute;
+      }
+    }
     try {
       final file = await FilePicker.pickFile(
         dialogTitle: 'Seleccionar copia de seguridad de Finora',
@@ -298,10 +307,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       if (confirmed != true || !mounted) return;
 
+      restoreLoadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Restaurando copia de seguridad',
+          message: 'Validando e importando los datos. No cierres Finora…',
+        ),
+      );
+      restoreLoadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
       final counts = await const BackupService().restoreBackup(
         userId: user.id,
         jsonText: jsonText,
       );
+      await closeRestoreLoading();
       ref.invalidate(accountsProvider);
       ref.invalidate(movementsProvider);
       ref.invalidate(summaryProvider);
@@ -317,6 +337,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.check_circle_outline_rounded,
       );
     } on AppException catch (error) {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudo restaurar',
@@ -324,6 +345,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } on FormatException {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'Archivo no válido',
@@ -331,6 +353,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } catch (_) {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudo restaurar',
@@ -338,6 +361,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } finally {
+      await closeRestoreLoading();
       if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
