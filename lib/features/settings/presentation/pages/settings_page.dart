@@ -1429,9 +1429,9 @@ class _NotificationsAndPatchesDialogState
   String _dateLabel(DateTime? value) {
     if (value == null) return 'Fecha no indicada';
     final date = value.toLocal();
-    return '\${date.day.toString().padLeft(2, '0')}/'
-        '\${date.month.toString().padLeft(2, '0')}/'
-        '\${date.year}';
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
   }
 
   @override
@@ -1505,7 +1505,7 @@ class _NotificationsAndPatchesDialogState
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              '\${notice.message}\n\${_dateLabel(notice.publishedAt)}',
+                              '${notice.message}\n${_dateLabel(notice.publishedAt)}',
                             ),
                           ),
                         ),
@@ -1537,7 +1537,7 @@ class _NotificationsAndPatchesDialogState
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      '\${patch.title} · v\${patch.version}',
+                                      '${patch.title} · v${patch.version}',
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleSmall
@@ -1581,7 +1581,7 @@ class _NotificationsAndPatchesDialogState
                       ),
                   const SizedBox(height: 8),
                   Text(
-                    'Última actualización del listado: \${_dateLabel(manifest.updatedAt)}',
+                    'Última actualización del listado: ${_dateLabel(manifest.updatedAt)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
