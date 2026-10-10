@@ -1,10 +1,27 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/currency_utils.dart';
 
 class AppPreferences {
   AppPreferences._();
 
   static const _themeKey = 'theme_mode';
   static const _animationsKey = 'animations_enabled';
+  static const _currencyKey = 'finance_currency';
+
+  static Future<String> getCurrency() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getString(_currencyKey) ?? 'DOP';
+    return const {'DOP', 'USD', 'EUR'}.contains(value) ? value : 'DOP';
+  }
+
+  static Future<void> setCurrency(String code) async {
+    if (!const {'DOP', 'USD', 'EUR'}.contains(code)) {
+      throw ArgumentError.value(code, 'code', 'Moneda no compatible');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currencyKey, code);
+    setCurrencyCodeInMemory(code);
+  }
 
   static Future<ThemePreference> getTheme() async {
     final prefs = await SharedPreferences.getInstance();

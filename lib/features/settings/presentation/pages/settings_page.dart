@@ -1,10 +1,12 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
@@ -15,6 +17,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/database/migrations/legacy_data_migration_service.dart';
 import '../../../finance/presentation/providers.dart';
 import '../../../../core/settings/app_preferences.dart';
+import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/update_dialog.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -28,11 +31,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _checkingForUpdate = false;
   bool _dataOperationInProgress = false;
   String? _currentVersion;
+  String _currencyCode = 'DOP';
 
   @override
   void initState() {
     super.initState();
     _loadCurrentVersion();
+    _loadCurrency();
   }
 
   Future<void> _loadCurrentVersion() async {
@@ -51,6 +56,64 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _currentVersion = 'Desconocida';
       });
     }
+  }
+
+  Future<void> _loadCurrency() async {
+    final currency = await AppPreferences.getCurrency();
+    if (!mounted) return;
+    setState(() => _currencyCode = currency);
+  }
+
+  Future<void> _showCurrencySelector() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Moneda de visualización'),
+              subtitle: Text('Cambia el símbolo; no convierte los importes.'),
+            ),
+            RadioGroup<String>(
+              groupValue: _currencyCode,
+              onChanged: (value) => Navigator.pop(sheetContext, value),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    value: 'DOP',
+                    title: Text('Peso dominicano'),
+                    subtitle: Text(r'RD$'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'USD',
+                    title: Text('Dólar estadounidense'),
+                    subtitle: Text(r'USD$'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'EUR',
+                    title: Text('Euro'),
+                    subtitle: Text('€'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await AppPreferences.setCurrency(selected);
+    if (mounted) setState(() => _currencyCode = selected);
+  }
+
+  Future<void> _showCategoryManager() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const _CategoryManagerDialog(),
+    );
   }
 
   Future<void> _checkForUpdate() async {
@@ -144,40 +207,55 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       return;
     }
-
     setState(() => _dataOperationInProgress = true);
+    var loadingOpen = false;
+    Future<void>? loadingRoute;
     try {
-      final jsonText = await const BackupService().createBackup(user.id);
-      final now = DateTime.now();
-      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      final savedPath = await FilePicker.saveFile(
-        mimeType: 'application/json',
-        dialogTitle: 'Guardar copia de seguridad de Finora',
-        fileName: 'finora-backup-$stamp.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        bytes: Uint8List.fromList(utf8.encode(jsonText)),
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Creando copia de seguridad',
+          message: 'Preparando tus datos y guardando el archivo localmente…',
+        ),
       );
-
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
+      final jsonText = await const BackupService().createBackup(user.id);
+      final baseDirectory = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final backupDirectory = Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
+      await backupDirectory.create(recursive: true);
+      final now = DateTime.now();
+      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final file = File(p.join(backupDirectory.path, 'finora-backup-$stamp.json'));
+      await file.writeAsString(jsonText, encoding: utf8, flush: true);
       if (!mounted) return;
-      if (savedPath != null) {
-        await _showUpdateMessage(
-          title: 'Copia preparada',
-          message: 'La copia de seguridad se generó correctamente. Guárdala '
-              'en un lugar privado. No contiene contraseñas ni hashes de acceso.',
-          icon: Icons.check_circle_outline_rounded,
-        );
-      }
+      Navigator.of(context, rootNavigator: true).pop();
+      loadingOpen = false;
+      await loadingRoute;
+      await _showUpdateMessage(
+        title: 'Copia guardada',
+        message: 'La copia se guardó automáticamente.\n\nRuta:\n${file.path}\n\nConserva este archivo en un lugar privado. No contiene contraseñas ni hashes de acceso.',
+        icon: Icons.check_circle_outline_rounded,
+      );
     } catch (error) {
       if (!mounted) return;
+      if (loadingOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loadingOpen = false;
+        if (loadingRoute != null) await loadingRoute;
+      }
       await _showUpdateMessage(
         title: 'No se pudo crear la copia',
-        message: error is AppException
-            ? error.message
-            : 'Ocurrió un error al generar o guardar la copia de seguridad.',
+        message: error is AppException ? error.message : 'Ocurrió un error al generar o guardar la copia de seguridad.',
         icon: Icons.error_outline_rounded,
       );
     } finally {
+      if (loadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        if (loadingRoute != null) await loadingRoute;
+      }
       if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
@@ -195,6 +273,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
 
     setState(() => _dataOperationInProgress = true);
+    var restoreLoadingOpen = false;
+    Future<void>? restoreLoadingRoute;
+    Future<void> closeRestoreLoading() async {
+      if (restoreLoadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        restoreLoadingOpen = false;
+        if (restoreLoadingRoute != null) await restoreLoadingRoute;
+      }
+    }
     try {
       final file = await FilePicker.pickFile(
         dialogTitle: 'Seleccionar copia de seguridad de Finora',
@@ -204,7 +291,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted || file == null) return;
       final bytes = await file.readAsBytes();
       if (!mounted) return;
-      if (bytes.length > 10 * 1024 * 1024) {
+      if (bytes.length > BackupService.maxBackupBytes) {
         throw const AppException('La copia supera el límite de 10 MB.');
       }
       final jsonText = utf8.decode(bytes, allowMalformed: false);
@@ -233,10 +320,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       if (confirmed != true || !mounted) return;
 
+      restoreLoadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Restaurando copia de seguridad',
+          message: 'Validando e importando los datos. No cierres Finora…',
+        ),
+      );
+      restoreLoadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
       final counts = await const BackupService().restoreBackup(
         userId: user.id,
         jsonText: jsonText,
       );
+      await closeRestoreLoading();
       ref.invalidate(accountsProvider);
       ref.invalidate(movementsProvider);
       ref.invalidate(summaryProvider);
@@ -252,6 +350,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.check_circle_outline_rounded,
       );
     } on AppException catch (error) {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudo restaurar',
@@ -259,6 +358,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } on FormatException {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'Archivo no válido',
@@ -266,6 +366,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } catch (_) {
+      await closeRestoreLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudo restaurar',
@@ -273,6 +374,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.error_outline_rounded,
       );
     } finally {
+      await closeRestoreLoading();
       if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
@@ -478,16 +580,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             fontWeight: FontWeight.w700,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Personaliza Finora y administra tus datos.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.65),
-                          ),
-                    ),
+
                   ],
                 ),
               ),
@@ -532,18 +625,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.attach_money_rounded,
               title: 'Moneda',
-              subtitle: 'DOP — Peso dominicano',
-              onTap: () {
-                // Próximamente.
-              },
+              subtitle: currencyLabel(_currencyCode),
+              onTap: _showCurrencySelector,
             ),
             _SettingsTile(
               icon: Icons.category_outlined,
               title: 'Categorías',
               subtitle: 'Administrar categorías de ingresos y gastos',
-              onTap: () {
-                // Próximamente.
-              },
+              onTap: _showCategoryManager,
             ),
           ],
         ),
@@ -664,33 +753,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
         const SizedBox(height: 24),
 
-        Center(
-          child: Text(
-            'Finora',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.45),
-                ),
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        Center(
-          child: Text(
-            'Gestión financiera personal',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.35),
-                ),
-          ),
-        ),
-
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -769,6 +831,217 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (selected != null) {
       await ref.read(settingsProvider.notifier).setTheme(selected);
     }
+  }
+}
+
+
+class _OperationLoadingDialog extends StatelessWidget {
+  const _OperationLoadingDialog({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 48,
+                height: 48,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(message, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryManagerDialog extends ConsumerStatefulWidget {
+  const _CategoryManagerDialog();
+
+  @override
+  ConsumerState<_CategoryManagerDialog> createState() =>
+      _CategoryManagerDialogState();
+}
+
+class _CategoryManagerDialogState
+    extends ConsumerState<_CategoryManagerDialog> {
+  String _type = 'expense';
+  bool _busy = false;
+
+  Future<void> _addCategory() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_type == 'income' ? 'Nueva categoría de ingreso' : 'Nueva categoría de gasto'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Nombre',
+            hintText: 'Ej. Salario o Transporte',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Agregar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.trim().isEmpty || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(repoProvider).addCategory(name, _type);
+      ref.invalidate(categoriesProvider(_type));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error is AppException ? error.message : 'No se pudo agregar la categoría.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteCategory(int id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar categoría'),
+        content: Text('¿Quieres eliminar "$name"? Las categorías predeterminadas están protegidas y no se pueden eliminar.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(repoProvider).deleteCategory(id);
+      ref.invalidate(categoriesProvider(_type));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error is AppException ? error.message : 'No se pudo eliminar la categoría.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = ref.watch(categoriesProvider(_type));
+    return AlertDialog(
+      title: const Text('Categorías financieras'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'expense', label: Text('Gastos'), icon: Icon(Icons.south_west_rounded)),
+                ButtonSegment(value: 'income', label: Text('Ingresos'), icon: Icon(Icons.north_east_rounded)),
+              ],
+              selected: {_type},
+              onSelectionChanged: _busy ? null : (value) => setState(() => _type = value.first),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: categories.when(
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (_, __) => const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No se pudieron cargar las categorías.'),
+                ),
+                data: (items) => items.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('Todavía no hay categorías. Agrega la primera.'),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final category in items)
+                            ListTile(
+                              dense: true,
+                              title: Text(category.name),
+                              trailing: IconButton(
+                                tooltip: 'Eliminar categoría personalizada',
+                                onPressed: _busy ? null : () => _deleteCategory(category.id, category.name),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+            if (_busy) const LinearProgressIndicator(),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context),
+          child: const Text('Cerrar'),
+        ),
+        FilledButton.icon(
+          onPressed: _busy ? null : _addCategory,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Agregar'),
+        ),
+      ],
+    );
   }
 }
 

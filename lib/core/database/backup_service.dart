@@ -12,6 +12,7 @@ class BackupService {
 
   static const format = 'finora-backup';
   static const schemaVersion = 1;
+  static const maxBackupBytes = 10 * 1024 * 1024;
 
   Future<String> createBackup(String userId) async {
     if (userId.trim().isEmpty) {
@@ -63,7 +64,7 @@ class BackupService {
           }
         }
 
-        return const JsonEncoder.withIndent('  ').convert({
+        final jsonText = const JsonEncoder.withIndent('  ').convert({
           'format': format,
           'schema_version': schemaVersion,
           'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -72,6 +73,11 @@ class BackupService {
           'transactions': transactions.map(_safeTransaction).toList(),
           'transfers': transfers.map(_safeTransfer).toList(),
         });
+        if (jsonText.length > maxBackupBytes ||
+            utf8.encode(jsonText).length > maxBackupBytes) {
+          throw const AppException('La copia supera el límite de 10 MB.');
+        }
+        return jsonText;
     });
   }
 
@@ -83,6 +89,10 @@ class BackupService {
   }) async {
     if (userId.trim().isEmpty) {
       throw const AppException('No se pudo identificar la cuenta actual.');
+    }
+    if (jsonText.length > maxBackupBytes ||
+        utf8.encode(jsonText).length > maxBackupBytes) {
+      throw const AppException('La copia supera el límite de 10 MB.');
     }
 
     final Object? decoded;
