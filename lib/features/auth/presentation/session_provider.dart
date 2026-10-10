@@ -66,6 +66,7 @@ class SessionNotifier extends Notifier<AppUser?> {
       const AutomaticBackupService().runIfDue(user.id).catchError(
         (Object error, StackTrace stackTrace) {
           // Backup failures must never prevent sign-in. The next sign-in can retry.
+          return null;
         },
       ),
     );
