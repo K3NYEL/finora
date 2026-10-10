@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:finora/core/network/finora_remote_auth_api.dart';
 import 'package:finora/core/network/finora_remote_session_storage.dart';
@@ -19,14 +21,16 @@ class MemorySessionStorage implements RemoteSessionStorage {
   }
 }
 
-FinoraRemoteSession makeSession({String token = 'a' * 43, String expires = '2099-01-01T00:00:00.000Z'}) {
+String validToken() => List.filled(43, 'a').join();
+
+FinoraRemoteSession makeSession({String? token, String expires = '2099-01-01T00:00:00.000Z'}) {
   return FinoraRemoteSession.fromJson({
     'user': {
       'id': '8e7f6b7a-1234-4234-8234-123456789abc',
       'username': 'finora_user',
       'createdAt': '2026-10-01T12:00:00.000Z',
     },
-    'accessToken': token,
+    'accessToken': token ?? validToken(),
     'tokenType': 'Bearer',
     'expiresAt': expires,
   });
@@ -60,8 +64,16 @@ void main() {
 
     test('clears expired persisted sessions', () async {
       final storage = MemorySessionStorage()
-        ..value = '{"user":{"id":"id","username":"user","createdAt":"2026-10-01T00:00:00Z"},'
-            '"accessToken":"NaN","tokenType":"Bearer","expiresAt":"2000-01-01T00:00:00Z"}';
+        ..value = jsonEncode({
+          'user': {
+            'id': '8e7f6b7a-1234-4234-8234-123456789abc',
+            'username': 'finora_user',
+            'createdAt': '2026-10-01T00:00:00Z',
+          },
+          'accessToken': validToken(),
+          'tokenType': 'Bearer',
+          'expiresAt': '2000-01-01T00:00:00Z',
+        });
       final repository = FinoraRemoteSessionRepository(storage);
 
       expect(await repository.load(), isNull);
