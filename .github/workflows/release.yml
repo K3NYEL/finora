@@ -33,6 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.release_tag || github.ref_name }}
           fetch-depth: 0
 
       - name: Ensure release tag points to main history
