@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/utils/currency_utils.dart';
+import '../../../../core/updates/notifications_and_patches_dialog.dart';
 import '../../../../shared/widgets/movement_tile.dart';
 import '../../../../shared/widgets/async_value_view.dart';
 import '../../../../shared/widgets/finora_skeleton.dart';
@@ -74,6 +75,14 @@ class DashboardPage extends ConsumerWidget {
                   Text('Tu resumen financiero', style: mutedStyle),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: 'Notificaciones y parches',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const NotificationsAndPatchesDialog(),
+              ),
+              icon: const Icon(Icons.notifications_active_outlined),
             ),
             IconButton(
               tooltip: 'Configuración',
