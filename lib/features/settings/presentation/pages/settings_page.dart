@@ -204,7 +204,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted || file == null) return;
       final bytes = await file.readAsBytes();
       if (!mounted) return;
-      if (bytes.length > 10 * 1024 * 1024) {
+      if (bytes.length > BackupService.maxBackupBytes) {
         throw const AppException('La copia supera el límite de 10 MB.');
       }
       final jsonText = utf8.decode(bytes, allowMalformed: false);
