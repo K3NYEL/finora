@@ -210,7 +210,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await closeLoading();
       ref.invalidate(accountsProvider);
       ref.invalidate(movementsProvider);
-      ref.invalidate(transfersProvider);
+      ref.invalidate(summaryProvider);
+      ref.invalidate(byCategoryProvider);
       ref.invalidate(categoriesProvider('income'));
       ref.invalidate(categoriesProvider('expense'));
       if (!mounted) return;
