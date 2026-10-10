@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_repository.dart';
 import '../domain/user.dart';
+import '../../../core/database/automatic_backup_service.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(),
@@ -59,6 +62,13 @@ class SessionNotifier extends Notifier<AppUser?> {
   Future<void> setUser(AppUser user) async {
     await rememberUser(user);
     state = user;
+    unawaited(
+      const AutomaticBackupService().runIfDue(user.id).catchError(
+        (Object error, StackTrace stackTrace) {
+          // Backup failures must never prevent sign-in. The next sign-in can retry.
+        },
+      ),
+    );
   }
 
   /// Cierra la sesión, pero conserva la cuenta recordada.
