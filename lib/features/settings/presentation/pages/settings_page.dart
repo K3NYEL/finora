@@ -534,7 +534,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
       );
-      final confirmation = confirmationController.text;
+      final confirmation = confirmationController!.text;
       if (confirmed != true || !mounted) return;
 
       loadingRoute = showDialog<void>(
