@@ -24,6 +24,7 @@ import '../../../finance/presentation/providers.dart';
 import '../../../../core/settings/app_preferences.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/update_dialog.dart';
+import '../../../../shared/widgets/finora_logo.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -1272,8 +1273,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               icon: Icons.auto_graph_rounded,
               title: 'Acerca de Finora',
               subtitle: 'Información sobre la aplicación',
-              onTap: () {
-                // Próximamente.
+              onTap: () async {
+                final packageInfo = await PackageInfo.fromPlatform();
+                if (!context.mounted) return;
+
+                await showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    content: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const FinoraLogo(size: 76),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Finora',
+                            style: Theme.of(dialogContext).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Gestión financiera personal',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                                  color: Theme.of(dialogContext).colorScheme.primary,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Finora te ayuda a organizar tus finanzas en un solo lugar. Administra tus cuentas, registra ingresos, gastos y transferencias, consulta estadísticas y personaliza tus categorías. Su enfoque local-first mantiene tus datos financieros principalmente en el dispositivo.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 18),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Funciones principales',
+                              style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('• Cuentas, balances y movimientos financieros'),
+                                Text('• Estadísticas y categorías personalizadas'),
+                                Text('• Copias de seguridad y restauración'),
+                                Text('• Temas claro, oscuro y del sistema'),
+                                Text('• Comprobación de actualizaciones'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Versión ${packageInfo.version}',
+                            style: Theme.of(dialogContext).textTheme.labelMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Cerrar'),
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
             _SettingsTile(
