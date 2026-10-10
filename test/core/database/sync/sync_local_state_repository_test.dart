@@ -117,4 +117,32 @@ void main() {
     expect(result.blockers, contains('financial_amount_integrity_failed'));
   });
 
+  test('dry-run preview returns only counts and never treats blocked data as uploadable', () async {
+    final db = await openFixture();
+    addTearDown(db.close);
+    final repository = SyncLocalStateRepository(db);
+
+    final blocked = await repository.previewForUser('local-a');
+    expect(blocked.recordCounts, {
+      'accounts': 1,
+      'categories': 1,
+      'transactions': 0,
+      'transfers': 0,
+    });
+    expect(blocked.totalRecords, 2);
+    expect(blocked.eligibleRecords, 0);
+    expect(blocked.readiness.blockers, contains('sync_disabled'));
+
+    await linkSync(db);
+    final ready = await repository.previewForUser('local-a');
+    expect(ready.readiness.ready, isTrue);
+    expect(ready.totalRecords, 2);
+    expect(ready.eligibleRecords, 2);
+
+    final state = await repository.getState();
+    expect(state['cursor'], 0);
+    expect(state['enabled'], 1);
+  });
+
+
 }
