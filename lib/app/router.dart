@@ -15,6 +15,7 @@ import '../features/settings/presentation/pages/cloud_account_page.dart';
 import '../features/statistics/presentation/pages/statistics_page.dart';
 import '../features/transactions/presentation/pages/transactions_page.dart';
 import '../shared/widgets/finora_skeleton.dart';
+import '../shared/widgets/finora_logo.dart';
 import '../shared/widgets/update_dialog.dart';
 import 'router_refresh_notifier.dart';
 import 'settings_provider.dart';
@@ -238,22 +239,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Icon(
-                  Icons.auto_graph_rounded,
-                  size: 46,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
+              const FinoraLogo(size: 88),
               const SizedBox(height: 22),
               Text(
                 'Finora',
