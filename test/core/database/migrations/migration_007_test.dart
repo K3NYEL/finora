@@ -64,7 +64,7 @@ void main() {
     await applyMigration007(db);
 
     final before = (await db.query('accounts')).single['sync_id'];
-    await db.update('accounts', {'name': 'ignored'}, where: 'id = ?', whereArgs: [1]);
+    await db.update('accounts', {'user_id': 'user-a'}, where: 'id = ?', whereArgs: [1]);
     final after = (await db.query('accounts')).single['sync_id'];
     expect(after, before);
 
