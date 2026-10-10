@@ -32,12 +32,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _dataOperationInProgress = false;
   String? _currentVersion;
   String _currencyCode = 'DOP';
+  String _autoBackupFrequency = 'disabled';
 
   @override
   void initState() {
     super.initState();
     _loadCurrentVersion();
     _loadCurrency();
+    _loadAutoBackupFrequency();
   }
 
   Future<void> _loadCurrentVersion() async {
@@ -55,6 +57,179 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       setState(() {
         _currentVersion = 'Desconocida';
       });
+    }
+  }
+
+  Future<void> _loadAutoBackupFrequency() async {
+    final frequency = await AppPreferences.getAutoBackupFrequency();
+    if (!mounted) return;
+    setState(() => _autoBackupFrequency = frequency);
+  }
+
+  String _autoBackupLabel(String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return 'Diaria al iniciar sesión';
+      case 'weekly':
+        return 'Semanal al iniciar sesión';
+      default:
+        return 'Desactivada';
+    }
+  }
+
+  Future<void> _configureAutoBackup() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Copia automática'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Text(
+              'Finora guardará una copia local cuando inicies sesión y haya pasado el intervalo elegido. No se ejecuta en segundo plano con la app cerrada.',
+            ),
+          ),
+          for (final option in const [
+            ('disabled', 'Desactivada'),
+            ('daily', 'Cada 24 horas al iniciar sesión'),
+            ('weekly', 'Cada 7 días al iniciar sesión'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, option.$1),
+              child: Row(
+                children: [
+                  Icon(_autoBackupFrequency == option.$1 ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(option.$2)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await AppPreferences.setAutoBackupFrequency(selected);
+    if (!mounted) return;
+    setState(() => _autoBackupFrequency = selected);
+    await _showUpdateMessage(
+      title: 'Copia automática actualizada',
+      message: selected == 'disabled'
+          ? 'La creación automática de copias quedó desactivada.'
+          : 'Finora intentará crear una copia cada ${selected == 'daily' ? '24 horas' : '7 días'} al iniciar sesión. Si no se puede guardar, el inicio de sesión seguirá funcionando y se volverá a intentar en el siguiente inicio.',
+      icon: Icons.backup_outlined,
+    );
+  }
+
+  Future<void> _deleteAllData() async {
+    if (_dataOperationInProgress) return;
+    final user = ref.read(sessionProvider);
+    if (user == null) {
+      await _showUpdateMessage(
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para eliminar tus datos financieros.',
+        icon: Icons.lock_outline_rounded,
+      );
+      return;
+    }
+
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Eliminar todos los datos financieros'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Esta acción eliminará de esta cuenta todas las cuentas financieras, movimientos, transferencias y categorías personalizadas. No elimina tu cuenta de acceso ni los datos de otras cuentas.'),
+                const SizedBox(height: 12),
+                const Text('Antes de continuar, Finora guardará una copia de seguridad. Si no puede crearla, no eliminará nada.'),
+                const SizedBox(height: 12),
+                Text('Para confirmar, escribe exactamente: ELIMINAR MIS DATOS', style: TextStyle(color: Theme.of(dialogContext).colorScheme.error, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(labelText: 'Confirmación', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: controller.text == 'ELIMINAR MIS DATOS' ? () => Navigator.pop(dialogContext, true) : null,
+              child: const Text('Crear copia y eliminar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _dataOperationInProgress = true);
+    var loadingOpen = false;
+    Future<void>? loadingRoute;
+    Future<void> closeLoading() async {
+      if (loadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loadingOpen = false;
+        if (loadingRoute != null) await loadingRoute;
+      }
+    }
+    try {
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Protegiendo tus datos',
+          message: 'Creando una copia preventiva antes de eliminar…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
+      final jsonText = await const BackupService().createBackup(user.id);
+      final safetyFile = await _saveBackupFile(jsonText);
+      await closeLoading();
+
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Eliminando datos financieros',
+          message: 'Eliminando únicamente los registros de esta cuenta…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
+      final deleted = await const BackupService().deleteUserData(user.id);
+      await closeLoading();
+      ref.invalidate(accountsProvider);
+      ref.invalidate(movementsProvider);
+      ref.invalidate(transfersProvider);
+      ref.invalidate(categoriesProvider('income'));
+      ref.invalidate(categoriesProvider('expense'));
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Datos eliminados',
+        message: 'Se eliminaron ${deleted['accounts']} cuentas, ${deleted['transactions']} movimientos y ${deleted['transfers']} transferencias. La copia preventiva está guardada como ${p.basename(safetyFile.path)}.',
+        icon: Icons.check_circle_outline_rounded,
+      );
+    } catch (error) {
+      await closeLoading();
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudieron eliminar los datos',
+        message: error is AppException ? error.message : 'No se completó la eliminación. Si falló la copia preventiva, tus datos no se eliminaron.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      await closeLoading();
+      if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
 
@@ -843,9 +1018,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onTap: _dataOperationInProgress ? null : _recoverLegacyData,
             ),
             _SettingsTile(
+              icon: Icons.backup_table_outlined,
+              title: 'Copia automática',
+              subtitle: _autoBackupLabel(_autoBackupFrequency),
+              onTap: _dataOperationInProgress ? null : _configureAutoBackup,
+            ),
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              title: 'Eliminar todos los datos',
+              subtitle: _dataOperationInProgress
+                  ? 'Operación en curso…'
+                  : 'Borrar los datos financieros de esta cuenta tras crear una copia',
+              onTap: _dataOperationInProgress ? null : _deleteAllData,
+            ),
+            _SettingsTile(
               icon: Icons.sync_outlined,
               title: 'Sincronización',
-              subtitle: 'Consultar el estado de la sincronización',
+              subtitle: 'No disponible: falta configurar el servidor',
               onTap: _showSyncInfo,
             ),
           ],
