@@ -59,6 +59,26 @@ class SyncLocalStateRepository {
       blockers.add('legacy_ownership_unresolved');
     }
 
+    // Financial values must be present as integer minor units before upload.
+    // Never fall back to REAL amounts or silently round corrupted records.
+    if (await count('''
+      SELECT COUNT(*) FROM accounts
+      WHERE user_id = ?
+        AND (initial_balance_minor IS NULL OR typeof(initial_balance_minor) <> 'integer')
+    ''', [localUserId]) > 0 ||
+        await count('''
+      SELECT COUNT(*) FROM transactions
+      WHERE user_id = ?
+        AND (amount_minor IS NULL OR typeof(amount_minor) <> 'integer' OR amount_minor <= 0)
+    ''', [localUserId]) > 0 ||
+        await count('''
+      SELECT COUNT(*) FROM transfers
+      WHERE user_id = ?
+        AND (amount_minor IS NULL OR typeof(amount_minor) <> 'integer' OR amount_minor <= 0)
+    ''', [localUserId]) > 0) {
+      blockers.add('financial_amount_integrity_failed');
+    }
+
     final resourceCounts = <String, String>{
       'accounts': 'user_id = ? AND sync_id IS NULL',
       'categories': 'user_id = ? AND sync_id IS NULL',
