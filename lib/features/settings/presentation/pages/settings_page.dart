@@ -420,102 +420,138 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _recoverLegacyData() async {
+    if (_dataOperationInProgress) return;
     final user = ref.read(sessionProvider);
-    if (user == null) return;
-
-    final database = await AppDatabase.instance;
-    final migration = LegacyDataMigrationService(database);
-    final status = await migration.getStatus();
-    final accounts = (status['unassigned_accounts'] as num?)?.toInt() ?? 0;
-    final transactions =
-        (status['unassigned_transactions'] as num?)?.toInt() ?? 0;
-    final transfers = (status['unassigned_transfers'] as num?)?.toInt() ?? 0;
-    final total = accounts + transactions + transfers;
-
-    if (!mounted) return;
-    if (total == 0) {
+    if (user == null) {
       await _showUpdateMessage(
-        title: 'No hay datos pendientes',
-        message: 'No se encontraron cuentas, movimientos ni transferencias '
-            'antiguas pendientes de recuperar.',
-        icon: Icons.check_circle_outline_rounded,
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para recuperar datos antiguos.',
+        icon: Icons.lock_outline_rounded,
       );
       return;
     }
 
-    final confirmationController = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Recuperar datos antiguos'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Finora encontró datos financieros sin propietario asignado '
-                'en esta instalación:',
+    setState(() => _dataOperationInProgress = true);
+    TextEditingController? confirmationController;
+    var loadingOpen = false;
+    Future<void>? loadingRoute;
+    Future<void> closeLoading() async {
+      if (loadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loadingOpen = false;
+        if (loadingRoute != null) await loadingRoute;
+      }
+    }
+
+    try {
+      final database = await AppDatabase.instance;
+      final migration = LegacyDataMigrationService(database);
+      final status = await migration.getStatus();
+      final accounts = (status['unassigned_accounts'] as num?)?.toInt() ?? 0;
+      final transactions =
+          (status['unassigned_transactions'] as num?)?.toInt() ?? 0;
+      final transfers = (status['unassigned_transfers'] as num?)?.toInt() ?? 0;
+      final total = accounts + transactions + transfers;
+
+      if (!mounted) return;
+      if (total == 0) {
+        await _showUpdateMessage(
+          title: 'No hay datos pendientes',
+          message: 'No se encontraron cuentas, movimientos ni transferencias '
+              'antiguas pendientes de recuperar.',
+          icon: Icons.check_circle_outline_rounded,
+        );
+        return;
+      }
+
+      confirmationController = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Recuperar datos antiguos'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Finora encontró datos financieros sin propietario '
+                    'asignado en esta instalación:',
+                  ),
+                  const SizedBox(height: 12),
+                  Text('• Cuentas: $accounts'),
+                  Text('• Movimientos: $transactions'),
+                  Text('• Transferencias: $transfers'),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Si continúas, las cuentas antiguas sin propietario se '
+                    'asignarán a tu perfil y los movimientos compatibles se '
+                    'vincularán a esas cuentas. Los registros que entren en '
+                    'conflicto permanecerán sin asignar.',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No continúes si este dispositivo fue compartido y esos '
+                    'datos podrían pertenecer a otra persona. Esta acción no '
+                    'se puede deshacer desde la aplicación.',
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Escribe exactamente: '
+                    '${LegacyDataMigrationService.confirmationPhrase}',
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmationController,
+                    autofocus: true,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Confirmación',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text('• Cuentas: $accounts'),
-              Text('• Movimientos: $transactions'),
-              Text('• Transferencias: $transfers'),
-              const SizedBox(height: 12),
-              const Text(
-                'Si continúas, las cuentas antiguas sin propietario se '
-                'asignarán a tu perfil y los movimientos compatibles se '
-                'vincularán a esas cuentas. Los registros que entren en '
-                'conflicto permanecerán sin asignar.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'No continúes si este dispositivo fue compartido y esos datos '
-                'podrían pertenecer a otra persona. Esta acción no se puede '
-                'deshacer desde la aplicación.',
-                style: TextStyle(
-                  color: Theme.of(dialogContext).colorScheme.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Escribe exactamente: ${LegacyDataMigrationService.confirmationPhrase}',
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: confirmationController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmación',
-                  border: OutlineInputBorder(),
-                ),
+              FilledButton(
+                onPressed: confirmationController!.text ==
+                        LegacyDataMigrationService.confirmationPhrase
+                    ? () => Navigator.of(dialogContext).pop(true)
+                    : null,
+                child: const Text('Recuperar datos'),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Recuperar datos'),
-          ),
-        ],
-      ),
-    );
-    final confirmation = confirmationController.text;
-    confirmationController.dispose();
+      );
+      final confirmation = confirmationController.text;
+      if (confirmed != true || !mounted) return;
 
-    if (confirmed != true || !mounted) return;
-
-    try {
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Recuperando datos antiguos',
+          message: 'Comprobando relaciones y asignando registros…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
       await migration.adoptLegacyData(
         userId: user.id,
         confirmation: confirmation,
       );
+      await closeLoading();
 
       ref.invalidate(accountsProvider);
       ref.invalidate(movementsProvider);
@@ -531,6 +567,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.check_circle_outline_rounded,
       );
     } catch (error) {
+      await closeLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudieron recuperar los datos',
@@ -539,6 +576,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             : 'Ocurrió un error inesperado. No se confirmó la recuperación.',
         icon: Icons.error_outline_rounded,
       );
+    } finally {
+      confirmationController?.dispose();
+      await closeLoading();
+      if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
 
@@ -703,8 +744,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.history_rounded,
               title: 'Recuperar datos antiguos',
-              subtitle: 'Revisar y recuperar datos sin propietario asignado',
-              onTap: _recoverLegacyData,
+              subtitle: _dataOperationInProgress
+                  ? 'Preparando operación...'
+                  : 'Revisar y recuperar datos sin propietario asignado',
+              onTap: _dataOperationInProgress ? null : _recoverLegacyData,
             ),
             _SettingsTile(
               icon: Icons.sync_outlined,
