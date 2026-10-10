@@ -12,7 +12,19 @@ class FinanceRepository {
 
   Future<Database> get _db => AppDatabase.instance;
 
-  static int _toMinorUnits(double amount) => (amount * 100).round();
+  // Keep all persisted amounts finite, cent-accurate and inside SQLite's
+  // signed 64-bit integer range (with a conservative interoperability limit).
+  static int _toMinorUnits(double amount) {
+    if (!amount.isFinite || amount < 0 || amount > 90071992547409.91) {
+      throw const AppException('El monto está fuera del rango permitido.');
+    }
+    final scaled = amount * 100;
+    final minor = scaled.round();
+    if ((scaled - minor).abs() > 0.000001) {
+      throw const AppException('Usa como máximo dos decimales en los montos.');
+    }
+    return minor;
+  }
 
   // El balance se deriva de los movimientos: nunca queda desincronizado.
   static const _accountsSql = '''
@@ -68,15 +80,16 @@ class FinanceRepository {
     if (name.trim().isEmpty) {
       throw const AppException('Escribe un nombre para la cuenta.');
     }
-    if (initial < 0) {
-      throw const AppException('El balance inicial no puede ser negativo.');
+    if (!initial.isFinite || initial < 0) {
+      throw const AppException('El balance inicial debe ser un monto válido y no negativo.');
     }
+    final initialMinor = _toMinorUnits(initial);
     await (await _db).insert('accounts', {
       'user_id': userId,
       'name': name.trim(),
       'type': type,
       'initial_balance': initial,
-      'initial_balance_minor': _toMinorUnits(initial),
+      'initial_balance_minor': initialMinor,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
@@ -132,8 +145,12 @@ class FinanceRepository {
     required double amount,
     String description = '',
   }) async {
-    if (amount <= 0) {
-      throw const AppException('El monto debe ser mayor que cero.');
+    if (!amount.isFinite || amount <= 0) {
+      throw const AppException('El monto debe ser mayor que cero y válido.');
+    }
+    final amountMinor = _toMinorUnits(amount);
+    if (amountMinor <= 0) {
+      throw const AppException('El monto mínimo permitido es 0.01.');
     }
     if (type != 'income' && type != 'expense') {
       throw const AppException('El tipo de movimiento no es válido.');
@@ -153,7 +170,7 @@ class FinanceRepository {
       'category_id': categoryId,
       'type': type,
       'amount': amount,
-      'amount_minor': _toMinorUnits(amount),
+      'amount_minor': amountMinor,
       'description': description.trim(),
       'date': now,
       'created_at': now,
@@ -162,8 +179,12 @@ class FinanceRepository {
 
   Future<void> addTransfer(
       int from, int to, double amount, String description) async {
-    if (amount <= 0) {
-      throw const AppException('El monto debe ser mayor que cero.');
+    if (!amount.isFinite || amount <= 0) {
+      throw const AppException('El monto debe ser mayor que cero y válido.');
+    }
+    final amountMinor = _toMinorUnits(amount);
+    if (amountMinor <= 0) {
+      throw const AppException('El monto mínimo permitido es 0.01.');
     }
     if (from == to) {
       throw const AppException('Elige dos cuentas diferentes.');
@@ -179,7 +200,7 @@ class FinanceRepository {
       'source_account_id': from,
       'destination_account_id': to,
       'amount': amount,
-      'amount_minor': _toMinorUnits(amount),
+      'amount_minor': amountMinor,
       'description': description.trim(),
       'date': now,
       'created_at': now,

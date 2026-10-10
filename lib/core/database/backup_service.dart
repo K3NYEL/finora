@@ -19,57 +19,59 @@ class BackupService {
     }
 
     final db = await AppDatabase.instance;
-    final accounts = await db.query(
-      'accounts',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
-    final transactions = await db.query(
-      'transactions',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
-    final transfers = await db.query(
-      'transfers',
-      where: 'user_id = ?',
-      whereArgs: [userId],
-      orderBy: 'id',
-    );
+    return db.transaction((txn) async {
+        final accounts = await txn.query(
+          'accounts',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
+        final transactions = await txn.query(
+          'transactions',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
+        final transfers = await txn.query(
+          'transfers',
+          where: 'user_id = ?',
+          whereArgs: [userId],
+          orderBy: 'id',
+        );
 
-    final categoryIds = <int>{};
-    for (final row in transactions) {
-      final id = row['category_id'];
-      if (id is int) categoryIds.add(id);
-    }
+        final categoryIds = <int>{};
+        for (final row in transactions) {
+          final id = row['category_id'];
+          if (id is int) categoryIds.add(id);
+        }
 
-    final categories = <Map<String, Object?>>[];
-    for (final id in categoryIds) {
-      final rows = await db.query(
-        'categories',
-        where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
-        whereArgs: [id, userId],
-        limit: 1,
-      );
-      if (rows.isNotEmpty) {
-        final row = rows.first;
-        categories.add({
-          'id': row['id'],
-          'name': row['name'],
-          'type': row['type'],
+        final categories = <Map<String, Object?>>[];
+        for (final id in categoryIds) {
+          final rows = await txn.query(
+            'categories',
+            where: 'id = ? AND (user_id IS NULL OR user_id = ?)',
+            whereArgs: [id, userId],
+            limit: 1,
+          );
+          if (rows.isNotEmpty) {
+            final row = rows.first;
+            categories.add({
+              'id': row['id'],
+              'name': row['name'],
+              'type': row['type'],
+            });
+          }
+        }
+
+        return const JsonEncoder.withIndent('  ').convert({
+          'format': format,
+          'schema_version': schemaVersion,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'accounts': accounts.map(_safeAccount).toList(),
+          'categories': categories,
+          'transactions': transactions.map(_safeTransaction).toList(),
+          'transfers': transfers.map(_safeTransfer).toList(),
         });
-      }
-    }
-
-    return const JsonEncoder.withIndent('  ').convert({
-      'format': format,
-      'schema_version': schemaVersion,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-      'accounts': accounts.map(_safeAccount).toList(),
-      'categories': categories,
-      'transactions': transactions.map(_safeTransaction).toList(),
-      'transfers': transfers.map(_safeTransfer).toList(),
     });
   }
 
@@ -111,10 +113,12 @@ class BackupService {
       _requireNumber(row, 'initial_balance');
       _requireString(row, 'created_at');
       if ((row['initial_balance'] as num) < 0 ||
-          (row['initial_balance_minor'] is num &&
-              ((row['initial_balance_minor'] as num).toInt() < 0 ||
-                  (row['initial_balance_minor'] as num).toInt() !=
-                      ((row['initial_balance'] as num) * 100).round()))) {
+          !_minorUnitsMatch(
+            row,
+            'initial_balance_minor',
+            (row['initial_balance'] as num).toDouble(),
+            allowZero: true,
+          )) {
         throw const AppException('La copia contiene un balance inicial inválido.');
       }
       if (!accountIds.add(row['id'] as int)) {
@@ -155,10 +159,11 @@ class BackupService {
         throw const AppException('La categoría no coincide con el tipo de movimiento.');
       }
       if ((row['amount'] as num) <= 0 ||
-          (row['amount_minor'] is num &&
-              ((row['amount_minor'] as num).toInt() <= 0 ||
-                  (row['amount_minor'] as num).toInt() !=
-                      ((row['amount'] as num) * 100).round()))) {
+          !_minorUnitsMatch(
+            row,
+            'amount_minor',
+            (row['amount'] as num).toDouble(),
+          )) {
         throw const AppException('La copia contiene un monto inválido.');
       }
     }
@@ -171,10 +176,11 @@ class BackupService {
           !accountIds.contains(row['destination_account_id']) ||
           row['source_account_id'] == row['destination_account_id'] ||
           (row['amount'] as num) <= 0 ||
-          (row['amount_minor'] is num &&
-              ((row['amount_minor'] as num).toInt() <= 0 ||
-                  (row['amount_minor'] as num).toInt() !=
-                      ((row['amount'] as num) * 100).round()))) {
+          !_minorUnitsMatch(
+            row,
+            'amount_minor',
+            (row['amount'] as num).toDouble(),
+          )) {
         throw const AppException(
           'La copia contiene una transferencia inválida.',
         );
@@ -345,6 +351,25 @@ class BackupService {
       throw AppException('La copia tiene una sección "$key" inválida.');
     }
     return value.cast<Map<String, dynamic>>();
+  }
+
+  static bool _minorUnitsMatch(
+    Map<String, dynamic> row,
+    String key,
+    double amount, {
+    bool allowZero = false,
+  }) {
+    if (!amount.isFinite || amount < 0 || amount > 90071992547409.91) {
+      return false;
+    }
+    final scaled = amount * 100;
+    final expected = scaled.round();
+    if ((scaled - expected).abs() > 0.000001) return false;
+
+    final value = row[key];
+    if (value == null) return true; // Legacy backups can omit minor units.
+    if (value is! int || value < (allowZero ? 0 : 1)) return false;
+    return value == expected;
   }
 
   static void _requireInt(Map<String, dynamic> row, String key) {

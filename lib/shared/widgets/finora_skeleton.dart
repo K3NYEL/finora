@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 class FinoraSkeleton extends StatefulWidget {
@@ -197,6 +199,8 @@ class FinoraLoadingScreen extends StatefulWidget {
 
 class _FinoraLoadingScreenState extends State<FinoraLoadingScreen>
     with SingleTickerProviderStateMixin {
+  Timer? _readyTimer;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
@@ -205,13 +209,14 @@ class _FinoraLoadingScreenState extends State<FinoraLoadingScreen>
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(widget.minimumDuration, () {
+    _readyTimer = Timer(widget.minimumDuration, () {
       if (mounted) widget.onReady?.call();
     });
   }
 
   @override
   void dispose() {
+    _readyTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -222,53 +227,60 @@ class _FinoraLoadingScreenState extends State<FinoraLoadingScreen>
     final scheme = theme.colorScheme;
 
     return Scaffold(
-      body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) => Transform.scale(
-            scale: 0.97 + (_controller.value * 0.03),
-            child: child,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: scheme.primary.withValues(alpha: 0.32),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) => Transform.scale(
+              scale: 0.985 + (_controller.value * 0.015),
+              child: child,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: scheme.primary.withValues(alpha: 0.32),
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.auto_graph_rounded,
+                          size: 40,
+                          color: scheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Finora',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.message,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Icon(
-                  Icons.auto_graph_rounded,
-                  size: 46,
-                  color: scheme.primary,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Finora',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                widget.message,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const SizedBox(
-                width: 170,
-                child: SkeletonBox(height: 6, borderRadius: 99),
-              ),
-            ],
+                const SizedBox(height: 30),
+                const DashboardSkeleton(),
+              ],
+            ),
           ),
         ),
       ),

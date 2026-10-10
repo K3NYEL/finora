@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -96,6 +97,28 @@ void main() {
     final backup = await service.createBackup(sourceUser);
     expect(backup, contains('finora-backup'));
     expect(backup, isNot(contains('not-exported-test-hash')));
+
+    // Fractional minor units must be rejected rather than silently truncated.
+    final malformedBackup =
+        jsonDecode(jsonEncode(jsonDecode(backup))) as Map<String, dynamic>;
+    final malformedTransactions =
+        malformedBackup['transactions'] as List<dynamic>;
+    (malformedTransactions.single as Map<String, dynamic>)['amount_minor'] =
+        10000.5;
+    await expectLater(
+      service.restoreBackup(
+        userId: destinationUser,
+        jsonText: jsonEncode(malformedBackup),
+      ),
+      throwsA(isA<AppException>()),
+    );
+    expect(
+      Sqflite.firstIntValue(await db.rawQuery(
+        'SELECT COUNT(*) FROM accounts WHERE user_id = ?',
+        [destinationUser],
+      )),
+      0,
+    );
 
     final restored = await service.restoreBackup(
       userId: destinationUser,
