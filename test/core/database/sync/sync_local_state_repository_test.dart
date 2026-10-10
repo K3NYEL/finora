@@ -15,11 +15,21 @@ void main() {
     await db.execute('CREATE TABLE categories (id INTEGER PRIMARY KEY, user_id TEXT)');
     await db.execute('CREATE TABLE transactions (id INTEGER PRIMARY KEY, user_id TEXT, account_id INTEGER, category_id INTEGER)');
     await db.execute('CREATE TABLE transfers (id INTEGER PRIMARY KEY, user_id TEXT, source_account_id INTEGER, destination_account_id INTEGER)');
-    await db.insert('accounts', {'id': 1, 'user_id': 'local-a'});\n    await db.insert('accounts', {'id': 2, 'user_id': 'local-b'});
+    await db.insert('accounts', {'id': 1, 'user_id': 'local-a'});
+    await db.insert('accounts', {'id': 2, 'user_id': 'local-b'});
     await db.insert('categories', {'id': 1, 'user_id': 'local-a'});
     await db.insert('categories', {'id': 2, 'user_id': null});
     await applyMigration007(db);
     return db;
+  }
+
+  Future<void> linkSync(Database db) async {
+    await db.update('sync_state', {
+      'enabled': 1,
+      'local_user_id': 'local-a',
+      'remote_user_id': 'remote-uuid-a',
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, where: 'id = 1');
   }
 
   test('readiness gate blocks sync until explicit local and remote linking', () async {
@@ -33,13 +43,7 @@ void main() {
     expect(initial.blockers, contains('local_account_not_linked'));
     expect(initial.blockers, contains('remote_account_not_linked'));
 
-    await db.update('sync_state', {
-      'enabled': 1,
-      'local_user_id': 'local-a',
-      'remote_user_id': 'remote-uuid-a',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, where: 'id = 1');
-
+    await linkSync(db);
     final linked = await repository.inspectForUser('local-a');
     expect(linked.ready, isTrue);
     expect(linked.blockers, isEmpty);
@@ -55,16 +59,41 @@ void main() {
       'account_id': 1,
       'category_id': 2,
     });
-    await db.update('sync_state', {
-      'enabled': 1,
-      'local_user_id': 'local-a',
-      'remote_user_id': 'remote-uuid-a',
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, where: 'id = 1');
+    await linkSync(db);
 
     final result = await SyncLocalStateRepository(db).inspectForUser('local-a');
     expect(result.ready, isFalse);
     expect(result.blockers, contains('legacy_ownership_unresolved'));
     expect(result.blockers, contains('shared_category_mapping_required'));
+  });
+
+  test('readiness gate blocks transactions and transfers crossing owner boundaries', () async {
+    final db = await openFixture();
+    addTearDown(db.close);
+    await db.insert('categories', {'id': 3, 'user_id': 'local-b'});
+    await db.insert('transactions', {
+      'id': 10,
+      'user_id': 'local-a',
+      'account_id': 2,
+      'category_id': 1,
+    });
+    await db.insert('transactions', {
+      'id': 11,
+      'user_id': 'local-a',
+      'account_id': 1,
+      'category_id': 3,
+    });
+    await db.insert('transfers', {
+      'id': 20,
+      'user_id': 'local-a',
+      'source_account_id': 1,
+      'destination_account_id': 2,
+    });
+    await linkSync(db);
+
+    final result = await SyncLocalStateRepository(db).inspectForUser('local-a');
+    expect(result.ready, isFalse);
+    expect(result.blockers, contains('transaction_relationship_owner_mismatch'));
+    expect(result.blockers, contains('transfer_relationship_owner_mismatch'));
   });
 }
