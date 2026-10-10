@@ -386,7 +386,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final selectedPath = await _chooseBackup(localBackups);
       if (!mounted || selectedPath == null) return;
 
-      Uint8List bytes;
+      List<int> bytes;
       String fileName;
       if (selectedPath == '__external__') {
         final externalFile = await FilePicker.pickFile(
