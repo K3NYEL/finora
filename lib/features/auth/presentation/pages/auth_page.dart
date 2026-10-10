@@ -289,18 +289,14 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   ),
                   const SizedBox(height: 32),
                   if (ref.watch(finoraApiConfiguredProvider)) ...[
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: _useRemoteAuth,
-                      onChanged: _isLoading
-                          ? null
-                          : (value) => setState(() {
-                                _useRemoteAuth = value;
-                                _loginIdentifierController.clear();
-                              }),
-                      title: const Text('Usar cuenta en la nube'),
-                      subtitle: const Text(
-                        'Autenticación remota disponible; los datos financieros aún permanecen locales.',
+                    Align(
+                      alignment: Alignment.center,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading
+                            ? null
+                            : () => context.go('/settings/cloud-account'),
+                        icon: const Icon(Icons.cloud_sync_outlined),
+                        label: const Text('Vincular cuenta remota'),
                       ),
                     ),
                     const SizedBox(height: 12),
