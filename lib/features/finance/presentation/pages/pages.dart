@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/errors/app_exception.dart';
@@ -6,6 +7,8 @@ import '../../../../core/utils/amount_parser.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../shared/widgets/async_state_view.dart';
 import '../../../../shared/widgets/movement_tile.dart';
+import '../../../../shared/widgets/finora_skeleton.dart';
+import '../../../auth/presentation/session_provider.dart';
 import '../providers.dart';
 
 TextStyle _muted(BuildContext context) => TextStyle(
@@ -24,7 +27,7 @@ class TransactionsPage extends ConsumerWidget {
         onRetry: () => ref.invalidate(movementsProvider),
       );
     }
-    if (movements.isLoading) return const AsyncStateView();
+    if (movements.isLoading) return const TransactionsSkeleton();
     final all = movements.value ?? [];
     final list =
         filter == 'all' ? all : all.where((m) => m.kind == filter).toList();
@@ -67,6 +70,31 @@ class TransactionsPage extends ConsumerWidget {
       ],
     );
   }
+}
+
+Widget _profileDetail(
+  BuildContext context, {
+  required IconData icon,
+  required String label,
+  required String value,
+}) {
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: _muted(context)),
+            const SizedBox(height: 2),
+            Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class AccountsPage extends ConsumerWidget {
@@ -157,9 +185,19 @@ class AccountsPage extends ConsumerWidget {
         onRetry: () => ref.invalidate(accountsProvider),
       );
     }
-    if (accounts.isLoading) return const AsyncStateView();
+    if (accounts.isLoading) return const AccountsSkeleton();
     final accountList = accounts.value ?? [];
     final total = accountList.fold<double>(0, (sum, account) => sum + account.balance);
+    final user = ref.watch(sessionProvider);
+    final localizations = MaterialLocalizations.of(context);
+
+    String formatDateTime(DateTime? value) {
+      if (value == null) return 'Sin registro';
+      final local = value.toLocal();
+      final date = localizations.formatMediumDate(local);
+      final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local));
+      return '$date · $time';
+    }
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -169,11 +207,111 @@ class AccountsPage extends ConsumerWidget {
           children: [
             Text('Mis cuentas', style: Theme.of(context).textTheme.titleLarge),
             IconButton(
+              tooltip: 'Crear cuenta',
               onPressed: () => _new(context, ref),
               icon: const Icon(Icons.add),
             ),
           ],
         ),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 27,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                      child: Text(
+                        user == null
+                            ? '?'
+                            : '${user.firstName.trim().isNotEmpty ? user.firstName.trim()[0].toUpperCase() : ''}${user.lastName.trim().isNotEmpty ? user.lastName.trim()[0].toUpperCase() : ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.fullName.trim().isNotEmpty == true
+                                ? user!.fullName.trim()
+                                : 'Perfil local',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Perfil de este dispositivo',
+                            style: _muted(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ID de usuario', style: _muted(context)),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            user?.id ?? 'No disponible',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontFamily: 'monospace',
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (user != null)
+                      IconButton(
+                        tooltip: 'Copiar ID',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: user.id));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('ID copiado')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_rounded),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _profileDetail(
+                  context,
+                  icon: Icons.event_outlined,
+                  label: 'Cuenta creada',
+                  value: formatDateTime(user?.createdAt),
+                ),
+                const SizedBox(height: 8),
+                _profileDetail(
+                  context,
+                  icon: Icons.login_rounded,
+                  label: 'Último acceso',
+                  value: formatDateTime(user?.lastLogin),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (accountList.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -221,7 +359,7 @@ class StatisticsPage extends ConsumerWidget {
       );
     }
     if (summary.isLoading || categories.isLoading) {
-      return const AsyncStateView();
+      return const StatisticsSkeleton();
     }
 
     final s = summary.value;

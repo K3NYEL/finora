@@ -24,8 +24,20 @@ class _FinoraSkeletonState extends State<FinoraSkeleton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1250),
-  )..repeat();
+    duration: const Duration(milliseconds: 1450),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -181,6 +193,117 @@ class DashboardSkeleton extends StatelessWidget {
   }
 }
 
+class AccountsSkeleton extends StatelessWidget {
+  const AccountsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: const [
+        Row(
+          children: [
+            Expanded(child: SkeletonText(width: 132, height: 24)),
+            SkeletonBox(width: 42, height: 42, borderRadius: 14),
+          ],
+        ),
+        SizedBox(height: 18),
+        Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Row(
+              children: [
+                SkeletonBox(width: 54, height: 54, borderRadius: 27),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonText(width: 145, height: 18),
+                      SizedBox(height: 9),
+                      SkeletonText(width: 190, height: 13),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 18),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 12),
+        SkeletonCard(height: 76),
+        SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            SkeletonText(width: 64),
+            SkeletonText(width: 104, height: 22),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class TransactionsSkeleton extends StatelessWidget {
+  const TransactionsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Row(
+          children: [
+            Expanded(child: SkeletonText(width: 60)),
+            SizedBox(width: 8),
+            Expanded(child: SkeletonText(width: 60)),
+            SizedBox(width: 8),
+            Expanded(child: SkeletonText(width: 60)),
+          ],
+        ),
+        const SizedBox(height: 20),
+        for (var i = 0; i < 7; i++) ...[
+          const SkeletonCard(height: 68),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class StatisticsSkeleton extends StatelessWidget {
+  const StatisticsSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const SkeletonText(width: 115, height: 24),
+        const SizedBox(height: 18),
+        const SkeletonCard(height: 70),
+        const SizedBox(height: 8),
+        const SkeletonCard(height: 70),
+        const SizedBox(height: 8),
+        const SkeletonCard(height: 70),
+        const SizedBox(height: 24),
+        const SkeletonText(width: 180, height: 20),
+        const SizedBox(height: 14),
+        for (var i = 0; i < 5; i++) ...[
+          const SkeletonCard(height: 48),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
 class FinoraLoadingScreen extends StatefulWidget {
   const FinoraLoadingScreen({
     super.key,
@@ -203,8 +326,20 @@ class _FinoraLoadingScreenState extends State<FinoraLoadingScreen>
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
+    duration: const Duration(milliseconds: 1250),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
 
   @override
   void initState() {
