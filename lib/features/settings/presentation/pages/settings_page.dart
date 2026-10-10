@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,12 +34,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _dataOperationInProgress = false;
   String? _currentVersion;
   String _currencyCode = 'DOP';
+  String _autoBackupFrequency = 'disabled';
 
   @override
   void initState() {
     super.initState();
     _loadCurrentVersion();
     _loadCurrency();
+    _loadAutoBackupFrequency();
   }
 
   Future<void> _loadCurrentVersion() async {
@@ -55,6 +59,181 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       setState(() {
         _currentVersion = 'Desconocida';
       });
+    }
+  }
+
+  Future<void> _loadAutoBackupFrequency() async {
+    final frequency = await AppPreferences.getAutoBackupFrequency();
+    if (!mounted) return;
+    setState(() => _autoBackupFrequency = frequency);
+  }
+
+  String _autoBackupLabel(String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return 'Diaria al iniciar sesión';
+      case 'weekly':
+        return 'Semanal al iniciar sesión';
+      default:
+        return 'Desactivada';
+    }
+  }
+
+  Future<void> _configureAutoBackup() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Copia automática'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Text(
+              'Finora guardará una copia local cuando inicies sesión y haya pasado el intervalo elegido. No se ejecuta en segundo plano con la app cerrada. Los archivos JSON no están cifrados y contienen datos financieros legibles; guárdalos en un lugar privado.',
+            ),
+          ),
+          for (final option in const [
+            ('disabled', 'Desactivada'),
+            ('daily', 'Cada 24 horas al iniciar sesión'),
+            ('weekly', 'Cada 7 días al iniciar sesión'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, option.$1),
+              child: Row(
+                children: [
+                  Icon(_autoBackupFrequency == option.$1 ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(option.$2)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await AppPreferences.setAutoBackupFrequency(selected);
+    if (!mounted) return;
+    setState(() => _autoBackupFrequency = selected);
+    await _showUpdateMessage(
+      title: 'Copia automática actualizada',
+      message: selected == 'disabled'
+          ? 'La creación automática de copias quedó desactivada.'
+          : 'Finora intentará crear una copia cada ${selected == 'daily' ? '24 horas' : '7 días'} al iniciar sesión. Si no se puede guardar, el inicio de sesión seguirá funcionando y se volverá a intentar en el siguiente inicio.',
+      icon: Icons.backup_outlined,
+    );
+  }
+
+  Future<void> _deleteAllData() async {
+    if (_dataOperationInProgress) return;
+    final user = ref.read(sessionProvider);
+    if (user == null) {
+      await _showUpdateMessage(
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para eliminar tus datos financieros.',
+        icon: Icons.lock_outline_rounded,
+      );
+      return;
+    }
+
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Eliminar todos los datos financieros'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Esta acción eliminará de esta cuenta todas las cuentas financieras, movimientos, transferencias y categorías personalizadas. No elimina tu cuenta de acceso ni los datos de otras cuentas.'),
+                const SizedBox(height: 12),
+                const Text('Antes de continuar, Finora guardará una copia de seguridad. Si no puede crearla, no eliminará nada.'),
+                const SizedBox(height: 12),
+                Text('Para confirmar, escribe exactamente: ELIMINAR MIS DATOS', style: TextStyle(color: Theme.of(dialogContext).colorScheme.error, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(labelText: 'Confirmación', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: controller.text == 'ELIMINAR MIS DATOS' ? () => Navigator.pop(dialogContext, true) : null,
+              child: const Text('Crear copia y eliminar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _dataOperationInProgress = true);
+    var loadingOpen = false;
+    Future<void>? loadingRoute;
+    Future<void> closeLoading() async {
+      if (loadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loadingOpen = false;
+        if (loadingRoute != null) await loadingRoute;
+      }
+    }
+    try {
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Protegiendo tus datos',
+          message: 'Creando una copia preventiva antes de eliminar…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
+      final jsonText = await const BackupService().createBackup(user.id);
+      final safetyFile = await _saveBackupFile(jsonText, user.id);
+      await closeLoading();
+      if (!mounted) return;
+
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Eliminando datos financieros',
+          message: 'Eliminando únicamente los registros de esta cuenta…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
+      final deleted = await const BackupService().deleteUserData(user.id);
+      await closeLoading();
+      ref.invalidate(accountsProvider);
+      ref.invalidate(movementsProvider);
+      ref.invalidate(summaryProvider);
+      ref.invalidate(byCategoryProvider);
+      ref.invalidate(categoriesProvider('income'));
+      ref.invalidate(categoriesProvider('expense'));
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Datos eliminados',
+        message: 'Se eliminaron ${deleted['accounts']} cuentas, ${deleted['transactions']} movimientos y ${deleted['transfers']} transferencias. La copia preventiva está guardada como ${p.basename(safetyFile.path)}.',
+        icon: Icons.check_circle_outline_rounded,
+      );
+    } catch (error) {
+      await closeLoading();
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudieron eliminar los datos',
+        message: error is AppException ? error.message : 'No se completó la eliminación. Si falló la copia preventiva, tus datos no se eliminaron.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      await closeLoading();
+      if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
 
@@ -196,6 +375,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
 
+  Future<File> _saveBackupFile(String jsonText, String userId) async {
+    final baseDirectory = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+    final backupDirectory =
+        Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
+    await backupDirectory.create(recursive: true);
+
+    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final file = File(p.join(backupDirectory.path, 'finora-backup-$userKey-$stamp.json'));
+    await file.writeAsString(jsonText, encoding: utf8, flush: true);
+
+    // Keep only the five newest Finora backup files in this directory.
+    final backups = backupDirectory
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where((candidate) =>
+            p.basename(candidate.path).startsWith('finora-backup-$userKey-') &&
+            p.basename(candidate.path).endsWith('.json'))
+        .toList();
+    backups.sort((a, b) =>
+        b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    for (final oldBackup in backups.skip(5)) {
+      await oldBackup.delete();
+    }
+    return file;
+  }
+
   Future<void> _backupData() async {
     if (_dataOperationInProgress) return;
     final user = ref.read(sessionProvider);
@@ -222,21 +429,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       loadingOpen = true;
       await Future<void>.delayed(Duration.zero);
       final jsonText = await const BackupService().createBackup(user.id);
-      final baseDirectory = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
-      final backupDirectory = Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
-      await backupDirectory.create(recursive: true);
-      final now = DateTime.now();
-      final stamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-      final file = File(p.join(backupDirectory.path, 'finora-backup-$stamp.json'));
-      await file.writeAsString(jsonText, encoding: utf8, flush: true);
+      final file = await _saveBackupFile(jsonText, user.id);
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       loadingOpen = false;
       await loadingRoute;
       await _showUpdateMessage(
         title: 'Copia guardada',
-        message: 'La copia se guardó automáticamente.\n\nRuta:\n${file.path}\n\nConserva este archivo en un lugar privado. No contiene contraseñas ni hashes de acceso.',
+        message: 'La copia se guardó localmente.\n\nRuta:\n${file.path}\n\nImportante: el archivo JSON no está cifrado y contiene datos financieros legibles. Guárdalo en un lugar privado. No contiene contraseñas ni hashes de acceso.',
         icon: Icons.check_circle_outline_rounded,
       );
     } catch (error) {
@@ -258,6 +458,86 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
       if (mounted) setState(() => _dataOperationInProgress = false);
     }
+  }
+
+  Future<Directory> _getBackupDirectory() async {
+    final baseDirectory = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+    return Directory(p.join(baseDirectory.path, 'Finora', 'backups'));
+  }
+
+  Future<List<File>> _findLocalBackups(String userId) async {
+    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final directory = await _getBackupDirectory();
+    if (!await directory.exists()) return <File>[];
+    final backups = directory
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where((file) {
+          final name = p.basename(file.path);
+          return name.startsWith('finora-backup-$userKey-') &&
+              name.endsWith('.json');
+        })
+        .toList();
+    backups.sort((a, b) =>
+        b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    return backups;
+  }
+
+  Future<String?> _chooseBackup(List<File> backups) {
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restaurar copia'),
+        content: SizedBox(
+          width: 460,
+          child: backups.isEmpty
+              ? const Text(
+                  'No se encontraron copias de Finora en la carpeta habitual. '
+                  'Puedes buscar una copia guardada en otra ubicación.',
+                )
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: backups.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final backup = backups[index];
+                      final modified = backup.lastModifiedSync().toLocal();
+                      final date = '${modified.year.toString().padLeft(4, '0')}-'
+                          '${modified.month.toString().padLeft(2, '0')}-'
+                          '${modified.day.toString().padLeft(2, '0')} '
+                          '${modified.hour.toString().padLeft(2, '0')}:'
+                          '${modified.minute.toString().padLeft(2, '0')}';
+                      return ListTile(
+                        leading: const Icon(Icons.backup_outlined),
+                        title: Text(
+                          p.basename(backup.path),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text('Última modificación: $date'),
+                        onTap: () =>
+                            Navigator.of(dialogContext).pop(backup.path),
+                      );
+                    },
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop('__external__'),
+            child: const Text('Buscar otro archivo…'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _restoreData() async {
@@ -283,13 +563,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
     }
     try {
-      final file = await FilePicker.pickFile(
-        dialogTitle: 'Seleccionar copia de seguridad de Finora',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
-      if (!mounted || file == null) return;
-      final bytes = await file.readAsBytes();
+      final localBackups = await _findLocalBackups(user.id);
+      if (!mounted) return;
+      final selectedPath = await _chooseBackup(localBackups);
+      if (!mounted || selectedPath == null) return;
+
+      List<int> bytes;
+      String fileName;
+      if (selectedPath == '__external__') {
+        final externalFile = await FilePicker.pickFile(
+          dialogTitle: 'Seleccionar copia de seguridad de Finora',
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+        );
+        if (!mounted || externalFile == null) return;
+        bytes = await externalFile.readAsBytes();
+        fileName = externalFile.name;
+      } else {
+        final localFile = File(selectedPath);
+        bytes = await localFile.readAsBytes();
+        fileName = p.basename(localFile.path);
+      }
       if (!mounted) return;
       if (bytes.length > BackupService.maxBackupBytes) {
         throw const AppException('La copia supera el límite de 10 MB.');
@@ -301,10 +595,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Restaurar copia de seguridad'),
           content: Text(
-            'Se importarán los datos de "${file.name}" a la cuenta actual. '
+            'Se importarán los datos de "$fileName" a la cuenta actual. '
             'Los datos existentes no se borrarán; las cuentas y movimientos '
-            'se agregarán a los que ya tienes. La misma copia no puede '
-            'restaurarse dos veces en esta cuenta.',
+            'se agregarán a los que ya tienes. Antes de importar, Finora '
+            'creará una copia preventiva de tus datos actuales. La misma '
+            'copia no puede restaurarse dos veces en esta cuenta.',
           ),
           actions: [
             TextButton(
@@ -330,6 +625,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       restoreLoadingOpen = true;
       await Future<void>.delayed(Duration.zero);
+
+      // Do not begin importing unless the current account's data has first
+      // been saved successfully. This protects against accidental merges
+      // and gives the user a rollback file if they selected the wrong copy.
+      final currentData = await const BackupService().createBackup(user.id);
+      final safetyFile = await _saveBackupFile(currentData, user.id);
+
       final counts = await const BackupService().restoreBackup(
         userId: user.id,
         jsonText: jsonText,
@@ -346,7 +648,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         message: 'Se importaron ${counts['accounts']} cuentas, '
             '${counts['transactions']} movimientos y '
             '${counts['transfers']} transferencias. '
-            'Tus datos anteriores se conservaron.',
+            'Tus datos anteriores se conservaron. Copia preventiva: '
+            '${p.basename(safetyFile.path)}.',
         icon: Icons.check_circle_outline_rounded,
       );
     } on AppException catch (error) {
@@ -391,102 +694,139 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _recoverLegacyData() async {
+    if (_dataOperationInProgress) return;
     final user = ref.read(sessionProvider);
-    if (user == null) return;
-
-    final database = await AppDatabase.instance;
-    final migration = LegacyDataMigrationService(database);
-    final status = await migration.getStatus();
-    final accounts = (status['unassigned_accounts'] as num?)?.toInt() ?? 0;
-    final transactions =
-        (status['unassigned_transactions'] as num?)?.toInt() ?? 0;
-    final transfers = (status['unassigned_transfers'] as num?)?.toInt() ?? 0;
-    final total = accounts + transactions + transfers;
-
-    if (!mounted) return;
-    if (total == 0) {
+    if (user == null) {
       await _showUpdateMessage(
-        title: 'No hay datos pendientes',
-        message: 'No se encontraron cuentas, movimientos ni transferencias '
-            'antiguas pendientes de recuperar.',
-        icon: Icons.check_circle_outline_rounded,
+        title: 'Inicia sesión',
+        message: 'Debes iniciar sesión para recuperar datos antiguos.',
+        icon: Icons.lock_outline_rounded,
       );
       return;
     }
 
-    final confirmationController = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Recuperar datos antiguos'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Finora encontró datos financieros sin propietario asignado '
-                'en esta instalación:',
+    setState(() => _dataOperationInProgress = true);
+    TextEditingController? confirmationController;
+    var loadingOpen = false;
+    Future<void>? loadingRoute;
+    Future<void> closeLoading() async {
+      if (loadingOpen && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loadingOpen = false;
+        if (loadingRoute != null) await loadingRoute;
+      }
+    }
+
+    try {
+      final database = await AppDatabase.instance;
+      final migration = LegacyDataMigrationService(database);
+      final status = await migration.getStatus();
+      final accounts = (status['unassigned_accounts'] as num?)?.toInt() ?? 0;
+      final transactions =
+          (status['unassigned_transactions'] as num?)?.toInt() ?? 0;
+      final transfers = (status['unassigned_transfers'] as num?)?.toInt() ?? 0;
+      final total = accounts + transactions + transfers;
+
+      if (!mounted) return;
+      if (total == 0) {
+        await _showUpdateMessage(
+          title: 'No hay datos pendientes',
+          message: 'No se encontraron cuentas, movimientos ni transferencias '
+              'antiguas pendientes de recuperar.',
+          icon: Icons.check_circle_outline_rounded,
+        );
+        return;
+      }
+
+      final controller = TextEditingController();
+      confirmationController = controller;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('Recuperar datos antiguos'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Finora encontró datos financieros sin propietario '
+                    'asignado en esta instalación:',
+                  ),
+                  const SizedBox(height: 12),
+                  Text('• Cuentas: $accounts'),
+                  Text('• Movimientos: $transactions'),
+                  Text('• Transferencias: $transfers'),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Si continúas, las cuentas antiguas sin propietario se '
+                    'asignarán a tu perfil y los movimientos compatibles se '
+                    'vincularán a esas cuentas. Los registros que entren en '
+                    'conflicto permanecerán sin asignar.',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No continúes si este dispositivo fue compartido y esos '
+                    'datos podrían pertenecer a otra persona. Esta acción no '
+                    'se puede deshacer desde la aplicación.',
+                    style: TextStyle(
+                      color: Theme.of(dialogContext).colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Escribe exactamente: '
+                    '${LegacyDataMigrationService.confirmationPhrase}',
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Confirmación',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text('• Cuentas: $accounts'),
-              Text('• Movimientos: $transactions'),
-              Text('• Transferencias: $transfers'),
-              const SizedBox(height: 12),
-              const Text(
-                'Si continúas, las cuentas antiguas sin propietario se '
-                'asignarán a tu perfil y los movimientos compatibles se '
-                'vincularán a esas cuentas. Los registros que entren en '
-                'conflicto permanecerán sin asignar.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'No continúes si este dispositivo fue compartido y esos datos '
-                'podrían pertenecer a otra persona. Esta acción no se puede '
-                'deshacer desde la aplicación.',
-                style: TextStyle(
-                  color: Theme.of(dialogContext).colorScheme.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Escribe exactamente: ${LegacyDataMigrationService.confirmationPhrase}',
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: confirmationController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Confirmación',
-                  border: OutlineInputBorder(),
-                ),
+              FilledButton(
+                onPressed: controller.text ==
+                        LegacyDataMigrationService.confirmationPhrase
+                    ? () => Navigator.of(dialogContext).pop(true)
+                    : null,
+                child: const Text('Recuperar datos'),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Recuperar datos'),
-          ),
-        ],
-      ),
-    );
-    final confirmation = confirmationController.text;
-    confirmationController.dispose();
+      );
+      final confirmation = controller.text;
+      if (confirmed != true || !mounted) return;
 
-    if (confirmed != true || !mounted) return;
-
-    try {
+      loadingRoute = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _OperationLoadingDialog(
+          title: 'Recuperando datos antiguos',
+          message: 'Comprobando relaciones y asignando registros…',
+        ),
+      );
+      loadingOpen = true;
+      await Future<void>.delayed(Duration.zero);
       await migration.adoptLegacyData(
         userId: user.id,
         confirmation: confirmation,
       );
+      await closeLoading();
 
       ref.invalidate(accountsProvider);
       ref.invalidate(movementsProvider);
@@ -502,6 +842,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         icon: Icons.check_circle_outline_rounded,
       );
     } catch (error) {
+      await closeLoading();
       if (!mounted) return;
       await _showUpdateMessage(
         title: 'No se pudieron recuperar los datos',
@@ -510,6 +851,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             : 'Ocurrió un error inesperado. No se confirmó la recuperación.',
         icon: Icons.error_outline_rounded,
       );
+    } finally {
+      confirmationController?.dispose();
+      await closeLoading();
+      if (mounted) setState(() => _dataOperationInProgress = false);
     }
   }
 
@@ -674,13 +1019,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             _SettingsTile(
               icon: Icons.history_rounded,
               title: 'Recuperar datos antiguos',
-              subtitle: 'Revisar y recuperar datos sin propietario asignado',
-              onTap: _recoverLegacyData,
+              subtitle: _dataOperationInProgress
+                  ? 'Preparando operación...'
+                  : 'Revisar y recuperar datos sin propietario asignado',
+              onTap: _dataOperationInProgress ? null : _recoverLegacyData,
+            ),
+            _SettingsTile(
+              icon: Icons.backup_table_outlined,
+              title: 'Copia automática',
+              subtitle: _autoBackupLabel(_autoBackupFrequency),
+              onTap: _dataOperationInProgress ? null : _configureAutoBackup,
+            ),
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              title: 'Eliminar todos los datos',
+              subtitle: _dataOperationInProgress
+                  ? 'Operación en curso…'
+                  : 'Borrar los datos financieros de esta cuenta tras crear una copia',
+              onTap: _dataOperationInProgress ? null : _deleteAllData,
             ),
             _SettingsTile(
               icon: Icons.sync_outlined,
               title: 'Sincronización',
-              subtitle: 'Consultar el estado de la sincronización',
+              subtitle: 'No disponible: falta configurar el servidor',
               onTap: _showSyncInfo,
             ),
           ],
