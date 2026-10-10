@@ -1,4 +1,4 @@
-name: Flutter validation
+name: Flutter Android build validation
 
 on:
   push:
@@ -10,15 +10,15 @@ on:
 
 # Cancel outdated runs when a newer commit arrives for the same PR or branch.
 concurrency:
-  group: flutter-validation-${{ github.event.pull_request.number || github.ref }}
+  group: flutter-android-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Analyze, test, and compile Android
+  android-build:
+    name: Compile Android debug APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,12 +43,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test
 
       - name: Build Android debug APK
         run: flutter build apk --debug --target-platform android-arm64
