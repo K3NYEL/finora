@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -35,8 +34,11 @@ class AutomaticBackupService {
     await directory.create(recursive: true);
 
     final stamp = now.millisecondsSinceEpoch;
-    final userKey = sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
-    final file = File(p.join(directory.path, 'finora-backup-$userKey-$stamp.json'));
+    final userKey =
+        sha256.convert(utf8.encode(userId)).toString().substring(0, 16);
+    final file = File(
+      p.join(directory.path, 'finora-backup-$userKey-$stamp.json'),
+    );
     final temporary = File('${file.path}.tmp');
     await temporary.writeAsString(jsonText, flush: true);
     await temporary.rename(file.path);
