@@ -22,8 +22,6 @@ class GithubReleaseRepository {
       );
 
       debugPrint('[FINORA UPDATE] Consultando GitHub Releases...');
-      debugPrint('[FINORA UPDATE] $uri');
-
       final response = await http.get(
         uri,
         headers: const {
@@ -41,7 +39,6 @@ class GithubReleaseRepository {
       }
 
       final decoded = jsonDecode(response.body);
-
       if (decoded is! Map<String, dynamic>) {
         throw const UpdateCheckException(
           'GitHub devolvió una respuesta de release inválida.',
@@ -51,29 +48,38 @@ class GithubReleaseRepository {
       final tagName = decoded['tag_name'] as String?;
       final name = decoded['name'] as String?;
       final body = decoded['body'] as String? ?? '';
-
       if (tagName == null || tagName.isEmpty) {
         throw const UpdateCheckException(
           'La última release de GitHub no contiene un tag válido.',
         );
       }
 
-      final assets = <String, String>{};
+      final assets = <String, ReleaseAsset>{};
       final rawAssets = decoded['assets'];
-
       if (rawAssets is List) {
         for (final rawAsset in rawAssets) {
           if (rawAsset is! Map<String, dynamic>) continue;
-
           final assetName = rawAsset['name'] as String?;
           final downloadUrl = rawAsset['browser_download_url'] as String?;
-
-          if (assetName != null &&
-              assetName.isNotEmpty &&
-              downloadUrl != null &&
-              downloadUrl.isNotEmpty) {
-            assets[assetName] = downloadUrl;
+          final rawDigest = rawAsset['digest'] as String?;
+          final size = rawAsset['size'];
+          if (assetName == null ||
+              assetName.isEmpty ||
+              downloadUrl == null ||
+              downloadUrl.isEmpty ||
+              size is! int ||
+              size < 1) {
+            continue;
           }
+          final digestMatch = rawDigest == null
+              ? null
+              : RegExp(r'^sha256:([a-fA-F0-9]{64})$').firstMatch(rawDigest);
+          assets[assetName] = ReleaseAsset(
+            name: assetName,
+            downloadUrl: downloadUrl,
+            size: size,
+            sha256: digestMatch?.group(1)?.toLowerCase(),
+          );
         }
       }
 
@@ -106,8 +112,8 @@ class GithubReleaseRepository {
     } catch (e, stackTrace) {
       debugPrint('[FINORA UPDATE] Error inesperado: $e');
       debugPrint('$stackTrace');
-      throw UpdateCheckException(
-        'No se pudo consultar GitHub Releases: $e',
+      throw const UpdateCheckException(
+        'No se pudo consultar GitHub Releases.',
       );
     }
   }
