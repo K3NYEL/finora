@@ -50,8 +50,8 @@ class ApkInstaller {
 
     try {
       final directory = await getTemporaryDirectory();
-      apkFile = File('\${directory.path}/\${apk.name}');
-      partialFile = File('\${apkFile.path}.part');
+      apkFile = File('${directory.path}/${apk.name}');
+      partialFile = File('${apkFile.path}.part');
 
       if (await _isCompleteApk(apkFile) &&
           await _matchesExpectedDigest(apkFile, apk)) {
@@ -60,14 +60,14 @@ class ApkInstaller {
         await _deleteIfExists(apkFile);
         await _deleteIfExists(partialFile);
 
-        debugPrint('[FINORA UPDATE] Descargando \${apk.name}...');
+        debugPrint('[FINORA UPDATE] Descargando ${apk.name}...');
         final request = http.Request('GET', Uri.parse(apk.downloadUrl));
         final response = await client
             .send(request)
             .timeout(const Duration(minutes: 2));
 
         if (response.statusCode != HttpStatus.ok) {
-          debugPrint('[FINORA UPDATE] Error HTTP \${response.statusCode} al descargar APK.');
+          debugPrint('[FINORA UPDATE] Error HTTP ${response.statusCode} al descargar APK.');
           await response.stream.drain<void>();
           return ApkInstallResult.failed;
         }
