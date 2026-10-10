@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -87,7 +88,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const Padding(
             padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
             child: Text(
-              'Finora guardará una copia local cuando inicies sesión y haya pasado el intervalo elegido. No se ejecuta en segundo plano con la app cerrada.',
+              'Finora guardará una copia local cuando inicies sesión y haya pasado el intervalo elegido. No se ejecuta en segundo plano con la app cerrada. Los archivos JSON no están cifrados y contienen datos financieros legibles; guárdalos en un lugar privado.',
             ),
           ),
           for (final option in const [
@@ -435,7 +436,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       await loadingRoute;
       await _showUpdateMessage(
         title: 'Copia guardada',
-        message: 'La copia se guardó automáticamente.\n\nRuta:\n${file.path}\n\nConserva este archivo en un lugar privado. No contiene contraseñas ni hashes de acceso.',
+        message: 'La copia se guardó localmente.\n\nRuta:\n${file.path}\n\nImportante: el archivo JSON no está cifrado y contiene datos financieros legibles. Guárdalo en un lugar privado. No contiene contraseñas ni hashes de acceso.',
         icon: Icons.check_circle_outline_rounded,
       );
     } catch (error) {
