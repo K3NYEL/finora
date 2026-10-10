@@ -43,7 +43,7 @@ class FinoraApiClient {
       final streamed = await _http.send(request).timeout(_timeout);
       final response = await http.Response.fromStream(streamed).timeout(_timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw AppException(_safeServerMessage(response.statusCode, response.body));
+        throw AppException(_safeServerMessage(response.statusCode));
       }
       if (response.body.trim().isEmpty) return <String, dynamic>{};
       final decoded = jsonDecode(response.body);
@@ -62,30 +62,20 @@ class FinoraApiClient {
     }
   }
 
-  String _safeServerMessage(int statusCode, String responseBody) {
-    try {
-      final decoded = jsonDecode(responseBody);
-      if (decoded is Map<String, dynamic>) {
-        // Accept the documented { error: { message } } shape and the legacy
-        // top-level message shape, but never surface arbitrary server content.
-        final error = decoded['error'];
-        final nestedMessage = error is Map<String, dynamic> ? error['message'] : null;
-        final topLevelMessage = decoded['message'];
-        final message = nestedMessage is String ? nestedMessage : topLevelMessage;
-        if (message is String && message.trim().isNotEmpty && message.length <= 180) {
-          return message.trim();
-        }
-      }
-    } on FormatException {
-      // Do not expose arbitrary HTML or server internals to the user.
-    }
+  // Never display server-provided text: even short messages can contain
+  // internal details, HTML, or attacker-controlled content.
+  String _safeServerMessage(int statusCode) {
     switch (statusCode) {
+      case 400:
+        return 'La solicitud de Finora no es válida.';
       case 401:
         return 'La sesión del servidor no es válida.';
       case 403:
         return 'No tienes permiso para realizar esta operación.';
       case 404:
         return 'La función solicitada no está disponible en el servidor.';
+      case 409:
+        return 'Los datos cambiaron. Actualiza la información e inténtalo de nuevo.';
       case 429:
         return 'Se hicieron demasiadas solicitudes. Espera un momento.';
       default:
