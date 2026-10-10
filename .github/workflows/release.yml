@@ -32,10 +32,12 @@ jobs:
           fetch-depth: 0
 
       - name: Ensure release tag points to main history
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
+          : "${RELEASE_TAG:?Missing release tag}"
           git fetch origin main --no-tags
           git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           TAG_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
@@ -112,6 +114,8 @@ jobs:
 
       - name: Extract and validate release version
         id: version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,7 +127,7 @@ jobs:
             exit 1
           fi
 
-          RELEASE_TAG="${{ inputs.release_tag || github.ref_name }}"
+          : "${RELEASE_TAG:?Missing release tag}"
           TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$TAG_VERSION" != "$VERSION" ]; then
             echo "ERROR: Git tag v$TAG_VERSION does not match pubspec.yaml version $VERSION."
