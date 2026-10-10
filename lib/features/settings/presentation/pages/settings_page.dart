@@ -86,7 +86,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     value: 'DOP',
                     title: Text('Peso dominicano'),
                     subtitle: Text(r'RD
-            ),
           ],
         ),
       ),
@@ -1162,14 +1161,12 @@ class _SettingsTile extends StatelessWidget {
       onTap: onTap,
     );
   }
-}
-),
+}),
                   ),
                   RadioListTile<String>(
                     value: 'USD',
                     title: Text('Dólar estadounidense'),
                     subtitle: Text(r'USD
-            ),
           ],
         ),
       ),
@@ -2245,8 +2242,7 @@ class _SettingsTile extends StatelessWidget {
       onTap: onTap,
     );
   }
-}
-),
+}),
                   ),
                   RadioListTile<String>(
                     value: 'EUR',
