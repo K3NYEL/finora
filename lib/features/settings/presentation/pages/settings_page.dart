@@ -195,6 +195,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final jsonText = await const BackupService().createBackup(user.id);
       final safetyFile = await _saveBackupFile(jsonText);
       await closeLoading();
+      if (!mounted) return;
 
       loadingRoute = showDialog<void>(
         context: context,
