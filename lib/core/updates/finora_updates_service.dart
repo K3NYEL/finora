@@ -151,7 +151,7 @@ class FinoraUpdatesService {
 
       if (response.statusCode != 200) {
         throw FinoraUpdatesException(
-          'El servidor de avisos respondió HTTP \${response.statusCode}.',
+          'El servidor de avisos respondió HTTP ${response.statusCode}.',
         );
       }
       if (response.bodyBytes.length > 256 * 1024) {
