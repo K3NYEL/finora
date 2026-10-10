@@ -9,11 +9,15 @@ on:
       release_tag:
         description: "Existing release tag to build and attach APKs to (for example v0.5.18)"
         required: true
-        default: "v0.5.18"
+        default: "v0.5.19"
         type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: finora-release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-android:
@@ -43,6 +47,11 @@ jobs:
             echo "ERROR: Release tags must point to a commit contained in main history."
             exit 1
           fi
+
+          # Build the exact commit referenced by the selected release tag, including
+          # workflow_dispatch runs started from a branch other than the tag.
+          git checkout --detach "$TAG_SHA"
+          echo "Building release tag $RELEASE_TAG at commit $TAG_SHA"
 
       - name: Setup Java
         uses: actions/setup-java@v4
