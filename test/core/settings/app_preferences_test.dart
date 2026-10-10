@@ -23,8 +23,8 @@ void main() {
     });
 
     test('rejects an empty user identifier', () async {
-      expect(
-        () => AppPreferences.getLastAutoBackupAt('  '),
+      await expectLater(
+        AppPreferences.getLastAutoBackupAt('  '),
         throwsArgumentError,
       );
     });
