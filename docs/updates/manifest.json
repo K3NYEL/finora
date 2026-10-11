@@ -3,6 +3,13 @@
   "updatedAt": "2026-10-11T00:00:00Z",
   "notifications": [
     {
+      "id": "migration-to-myfinc-announcement",
+      "title": "Finora se prepara para dar paso a MyFinc",
+      "message": "Estamos trabajando en la transición de Finora a MyFinc, una nueva etapa del proyecto con un nuevo nombre e identidad. MyFinc se publicará como una aplicación independiente, por lo que no se instalará automáticamente encima de Finora. Tus datos locales seguirán guardados en Finora: no desinstales la aplicación ni borres sus datos hasta que publiquemos instrucciones oficiales sobre cómo continuar y proteger tu información. Avisaremos desde este centro cuando haya novedades y cuando MyFinc esté disponible.",
+      "publishedAt": "2026-10-11T00:00:00Z",
+      "level": "info"
+    },
+    {
       "id": "release-0.5.31-upcoming",
       "title": "Próxima actualización: Finora 0.5.31",
       "message": "Estamos preparando una próxima actualización de Finora. Incluirá mejoras en los avisos de novedades y la solicitud de permisos de notificación en Android. La actualización estará disponible cuando se publique oficialmente; te avisaremos desde este centro.",
