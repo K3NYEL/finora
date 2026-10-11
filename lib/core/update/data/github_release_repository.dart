@@ -8,10 +8,12 @@ import 'package:http/http.dart' as http;
 import '../domain/update_info.dart';
 
 class GithubReleaseRepository {
-  const GithubReleaseRepository();
+  const GithubReleaseRepository({this.repository = 'K3NYEL/finora'});
 
-  static const _latestReleaseUrl =
-      'https://api.github.com/repos/K3NYEL/finora/releases/latest';
+  final String repository;
+
+  String get _latestReleaseUrl =>
+      'https://api.github.com/repos/$repository/releases/latest';
 
   Future<ReleaseInfo> fetchLatestRelease() async {
     try {
