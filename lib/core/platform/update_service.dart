@@ -41,7 +41,7 @@ class UpdateService {
         final normalizedVersion = release.version.startsWith('v')
             ? release.version.substring(1)
             : release.version;
-        final assetName = 'MyFinc_v' + normalizedVersion + '_' + architecture + '.apk';
+        final assetName = 'MyFinc_v${normalizedVersion}_$architecture.apk';
         final asset = release.assets[assetName];
         if (asset != null &&
             asset.sha256 != null &&
@@ -59,8 +59,8 @@ class UpdateService {
         currentBuild: int.tryParse(packageInfo.buildNumber) ?? 0,
         latestVersion: release.version,
         latestBuild: release.build,
-        releaseName: release.name.isEmpty ? 'MyFinc ' + release.tagName : release.name,
-        releaseUrl: 'https://github.com/K3NYEL/myfinc/releases/tag/' + release.tagName,
+        releaseName: release.name.isEmpty ? 'MyFinc ${release.tagName}' : release.name,
+        releaseUrl: 'https://github.com/K3NYEL/myfinc/releases/tag/${release.tagName}',
         mandatory: false,
         notes: _extractNotes(release.body),
         apk: apk,
