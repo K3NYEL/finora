@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../app/theme/app_colors.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/utils/amount_parser.dart';
 import '../../../../core/utils/currency_utils.dart';
