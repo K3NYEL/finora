@@ -17,6 +17,20 @@ class MainActivity : FlutterActivity() {
     private val notificationChannel = "com.finora.app/notifications"
     private val notificationPermissionRequestCode = 7314
     private var pendingNotificationPermissionResult: MethodChannel.Result? = null
+    private var apkToDeleteOnResume: File? = null
+
+    override fun onResume() {
+        super.onResume()
+        // Android returns to Finora after the user confirms or cancels the installer.
+        // At that point the installer has finished using the temporary APK.
+        val completedApk = apkToDeleteOnResume ?: return
+        apkToDeleteOnResume = null
+        try {
+            if (completedApk.exists()) completedApk.delete()
+        } catch (exception: Exception) {
+            android.util.Log.w("FinoraUpdater", "Could not remove temporary APK", exception)
+        }
+    }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -124,6 +138,9 @@ class MainActivity : FlutterActivity() {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                // Keep the file available while Android's installer is open, then
+                // remove it when Finora resumes after installation/cancellation.
+                apkToDeleteOnResume = apkFile
                 startActivity(installIntent)
                 result.success("opened")
             } catch (exception: Exception) {
