@@ -1,6 +1,14 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-10T00:00:00Z",
-  "notifications": [],
+  "updatedAt": "2026-10-11T00:00:00Z",
+  "notifications": [
+    {
+      "id": "release-0.5.30-upcoming",
+      "title": "Próxima actualización: Finora 0.5.30",
+      "message": "Estamos preparando la versión 0.5.30. Esta actualización unifica el icono de la aplicación con el de inicio de sesión, mejora la sección «Acerca de Finora» y actualiza la documentación del proyecto. También incluye los cambios de estabilidad y correcciones ya integrados en esta versión. La actualización estará disponible cuando se publique oficialmente; te avisaremos desde este centro.",
+      "publishedAt": "2026-10-11T00:00:00Z",
+      "level": "info"
+    }
+  ],
   "patches": []
 }
