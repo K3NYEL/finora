@@ -577,7 +577,6 @@ class StatisticsPage extends ConsumerWidget {
     final comparisonTotal = income + expenses;
     final incomeRatio = comparisonTotal == 0 ? 0.0 : income / comparisonTotal;
     final expenseRatio = comparisonTotal == 0 ? 0.0 : expenses / comparisonTotal;
-    final numberFormat = MaterialLocalizations.of(context);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -715,11 +714,11 @@ class StatisticsPage extends ConsumerWidget {
                     child: Row(
                       children: [
                         Expanded(
-                          flex: incomeRatio == 0 ? 1 : (incomeRatio * 1000).round().clamp(1, 1000),
+                          flex: incomeRatio == 0 ? 1 : (incomeRatio * 1000).round().clamp(1, 1000).toInt(),
                           child: Container(height: 10, color: const Color(0xFF16A34A)),
                         ),
                         Expanded(
-                          flex: expenseRatio == 0 ? 1 : (expenseRatio * 1000).round().clamp(1, 1000),
+                          flex: expenseRatio == 0 ? 1 : (expenseRatio * 1000).round().clamp(1, 1000).toInt(),
                           child: Container(height: 10, color: scheme.error),
                         ),
                       ],
