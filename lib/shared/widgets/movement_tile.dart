@@ -12,6 +12,12 @@ class MovementTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final parsedDate = DateTime.tryParse(m.date)?.toLocal();
+    final dateLabel = parsedDate == null
+        ? ''
+        : '${MaterialLocalizations.of(context).formatShortDate(parsedDate)} · '
+            '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(parsedDate))}';
+    final subtitle = [m.subtitle, dateLabel].where((part) => part.isNotEmpty).join(' · ');
     final (icon, color, sign, label) = switch (m.kind) {
       'income' => (
           Icons.south_west_rounded,
@@ -64,7 +70,7 @@ class MovementTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    m.subtitle.isNotEmpty ? m.subtitle : label,
+                    subtitle.isNotEmpty ? subtitle : label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
