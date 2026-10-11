@@ -300,6 +300,54 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Future<void> _migrateToMyFinc() async {
+    if (_checkingForUpdate) return;
+    if (!Platform.isAndroid) {
+      await _showUpdateMessage(
+        title: 'Disponible en Android',
+        message: 'La instalación de MyFinc desde Finora solo está disponible en Android.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+    setState(() => _checkingForUpdate = true);
+    try {
+      final migration = await UpdateService.checkForMyFincMigration();
+      if (!mounted) return;
+      if (migration == null) {
+        await _showUpdateMessage(
+          title: 'MyFinc aún no está publicada',
+          message: 'Cuando se publique la release de MyFinc, podrás descargarla desde aquí.',
+          icon: Icons.hourglass_empty_rounded,
+        );
+      } else if (migration.apk == null) {
+        await _showUpdateMessage(
+          title: 'APK no disponible',
+          message: 'La release existe, pero no contiene el APK firmado y verificable para la arquitectura de este dispositivo.',
+          icon: Icons.warning_amber_rounded,
+        );
+      } else {
+        await showUpdateDialog(context, migration, migratingToMyFinc: true);
+      }
+    } on UpdateCheckException catch (e) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'No se pudo comprobar MyFinc',
+        message: e.message,
+        icon: Icons.cloud_off_outlined,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await _showUpdateMessage(
+        title: 'Error de migración',
+        message: 'No se pudo preparar la descarga de MyFinc. Inténtalo de nuevo más tarde.',
+        icon: Icons.error_outline_rounded,
+      );
+    } finally {
+      if (mounted) setState(() => _checkingForUpdate = false);
+    }
+  }
+
   Future<void> _checkForUpdate() async {
     if (_checkingForUpdate) return;
 
@@ -1263,6 +1311,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   );
                 }
               },
+            ),
+            _SettingsTile(
+              icon: Icons.swap_horiz_rounded,
+              title: 'Cambiar a MyFinc',
+              subtitle: 'Descargar e instalar MyFinc cuando se publique',
+              onTap: _checkingForUpdate ? null : _migrateToMyFinc,
             ),
             _SettingsTile(
               icon: Icons.system_update_outlined,
