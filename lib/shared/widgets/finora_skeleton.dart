@@ -258,19 +258,33 @@ class TransactionsSkeleton extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const SkeletonText(width: 150, height: 26),
+        const SizedBox(height: 8),
+        const SkeletonText(width: 124, height: 13),
+        const SizedBox(height: 18),
+        const SkeletonCard(height: 54),
+        const SizedBox(height: 12),
         const Row(
           children: [
-            Expanded(child: SkeletonText(width: 60)),
-            SizedBox(width: 8),
-            Expanded(child: SkeletonText(width: 60)),
-            SizedBox(width: 8),
-            Expanded(child: SkeletonText(width: 60)),
+            Expanded(child: SkeletonCard(height: 88)),
+            SizedBox(width: 10),
+            Expanded(child: SkeletonCard(height: 88)),
           ],
         ),
-        const SizedBox(height: 20),
-        for (var i = 0; i < 7; i++) ...[
-          const SkeletonCard(height: 68),
-          const SizedBox(height: 10),
+        const SizedBox(height: 16),
+        const Row(
+          children: [
+            SkeletonBox(width: 76, height: 34, borderRadius: 18),
+            SizedBox(width: 8),
+            SkeletonBox(width: 96, height: 34, borderRadius: 18),
+            SizedBox(width: 8),
+            SkeletonBox(width: 82, height: 34, borderRadius: 18),
+          ],
+        ),
+        const SizedBox(height: 18),
+        for (var i = 0; i < 6; i++) ...[
+          const SkeletonCard(height: 70),
+          const SizedBox(height: 9),
         ],
       ],
     );
@@ -285,18 +299,38 @@ class StatisticsSkeleton extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const SkeletonText(width: 115, height: 24),
+        const Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonText(width: 140, height: 26),
+                  SizedBox(height: 7),
+                  SkeletonText(width: 132, height: 13),
+                ],
+              ),
+            ),
+            SkeletonBox(width: 42, height: 42, borderRadius: 14),
+          ],
+        ),
         const SizedBox(height: 18),
-        const SkeletonCard(height: 70),
-        const SizedBox(height: 8),
-        const SkeletonCard(height: 70),
-        const SizedBox(height: 8),
-        const SkeletonCard(height: 70),
-        const SizedBox(height: 24),
-        const SkeletonText(width: 180, height: 20),
-        const SizedBox(height: 14),
+        const SkeletonCard(height: 142),
+        const SizedBox(height: 12),
+        const Row(
+          children: [
+            Expanded(child: SkeletonCard(height: 104)),
+            SizedBox(width: 10),
+            Expanded(child: SkeletonCard(height: 104)),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const SkeletonCard(height: 170),
+        const SizedBox(height: 22),
+        const SkeletonText(width: 180, height: 23),
+        const SizedBox(height: 12),
         for (var i = 0; i < 5; i++) ...[
-          const SkeletonCard(height: 48),
+          const SkeletonCard(height: 76),
           const SizedBox(height: 8),
         ],
       ],
