@@ -1,25 +1,95 @@
 import 'package:flutter/material.dart';
-import '../../app/theme/app_colors.dart';
+
 import '../../core/utils/currency_utils.dart';
 import '../../features/finance/domain/models.dart';
 
 class MovementTile extends StatelessWidget {
   final Movement m;
+
   const MovementTile(this.m, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    final (icon, color, sign) = switch (m.kind) {
-      'income' => (Icons.arrow_upward, AppColors.success, '+'),
-      'expense' => (Icons.arrow_downward, AppColors.error, '-'),
-      _ => (Icons.swap_horiz, AppColors.primary, ''),
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final (icon, color, sign, label) = switch (m.kind) {
+      'income' => (
+          Icons.south_west_rounded,
+          const Color(0xFF16A34A),
+          '+',
+          'Ingreso',
+        ),
+      'expense' => (
+          Icons.north_east_rounded,
+          scheme.error,
+          '−',
+          'Gasto',
+        ),
+      _ => (
+          Icons.swap_horiz_rounded,
+          scheme.primary,
+          '',
+          'Movimiento',
+        ),
     };
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(backgroundColor: AppColors.surface, child: Icon(icon, color: color, size: 20)),
-      title: Text(m.title),
-      subtitle: Text(m.subtitle, style: const TextStyle(color: AppColors.textSecondary)),
-      trailing: Text('$sign${money(m.amount)}', style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 21),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    m.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    m.subtitle.isNotEmpty ? m.subtitle : label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '$sign${money(m.amount)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
