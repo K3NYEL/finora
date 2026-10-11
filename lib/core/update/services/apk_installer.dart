@@ -149,13 +149,17 @@ class ApkInstaller {
       return false;
     }
 
-    final namePattern = RegExp(
+    final finoraName = RegExp(
       r'^Finora_v[0-9]+\.[0-9]+\.[0-9]+_(arm64-v8a|armeabi-v7a|x86_64)\.apk$',
     );
-    if (!namePattern.hasMatch(apk.name)) return false;
-
-    const expectedPrefix = '/K3NYEL/finora/releases/download/';
-    if (!uri.path.startsWith(expectedPrefix)) return false;
+    final myFincName = RegExp(
+      r'^MyFinc_v[0-9]+\.[0-9]+\.[0-9]+_(arm64-v8a|armeabi-v7a|x86_64)\.apk$',
+    );
+    final isFinora = finoraName.hasMatch(apk.name) &&
+        uri.path.startsWith('/K3NYEL/finora/releases/download/');
+    final isMyFinc = myFincName.hasMatch(apk.name) &&
+        uri.path.startsWith('/K3NYEL/myfinc/releases/download/');
+    if (!isFinora && !isMyFinc) return false;
     return uri.pathSegments.isNotEmpty && uri.pathSegments.last == apk.name;
   }
 
