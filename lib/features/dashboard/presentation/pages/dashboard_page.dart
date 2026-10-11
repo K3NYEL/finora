@@ -1,9 +1,12 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/utils/currency_utils.dart';
 import '../../../../core/updates/notifications_and_patches_dialog.dart';
+import '../../../../core/notifications/notification_permission_service.dart';
+import '../../../../core/settings/app_preferences.dart';
 import '../../../../shared/widgets/movement_tile.dart';
 import '../../../../shared/widgets/async_value_view.dart';
 import '../../../../shared/widgets/finora_skeleton.dart';
@@ -43,11 +46,61 @@ class DashboardStat extends StatelessWidget {
   }
 }
 
-class DashboardPage extends ConsumerWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _askForNotificationPermissionIfNeeded();
+    });
+  }
+
+  Future<void> _askForNotificationPermissionIfNeeded() async {
+    if (!NotificationPermissionService.isAndroid) return;
+    if (await AppPreferences.getNotificationPermissionPrompted()) return;
+    await AppPreferences.setNotificationPermissionPrompted(true);
+    if (!mounted) return;
+
+    final wantsNotifications = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.notifications_active_outlined),
+        title: const Text('Activa las notificaciones'),
+        content: const Text(
+          'Permite las notificaciones para preparar el dispositivo para avisos de Finora. Puedes cambiar este permiso en cualquier momento desde la configuración del teléfono.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+    if (wantsNotifications != true || !mounted) return;
+    try {
+      await NotificationPermissionService.requestPermission();
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo solicitar el permiso. Puedes revisarlo en Configuración.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final accountsState = ref.watch(accountsProvider);
     final summaryState = ref.watch(summaryProvider);
     final movementsState = ref.watch(movementsProvider);
