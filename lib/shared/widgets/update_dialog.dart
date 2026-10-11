@@ -6,8 +6,9 @@ import '../../core/platform/update_service.dart';
 
 Future<void> showUpdateDialog(
   BuildContext context,
-  UpdateInfo update,
-) async {
+  UpdateInfo update, {
+  bool migratingToMyFinc = false,
+}) async {
   final isAndroid = Platform.isAndroid;
 
   await showDialog<void>(
@@ -52,7 +53,7 @@ Future<void> showUpdateDialog(
               totalBytes = null;
               statusMessage = retryingAfterPermission
                   ? 'Usando el APK descargado. Preparando el instalador…'
-                  : 'Preparando actualización…';
+                  : migratingToMyFinc ? 'Preparando la instalación de MyFinc…' : 'Preparando actualización…';
             });
 
             final installResult = await UpdateService.downloadAndInstall(
@@ -61,12 +62,12 @@ Future<void> showUpdateDialog(
                 setState(() {
                   receivedBytes = received;
                   totalBytes = total;
-                  statusMessage = 'Descargando actualización…';
+                  statusMessage = migratingToMyFinc ? 'Descargando MyFinc…' : 'Descargando actualización…';
                 });
               },
               onOpeningInstaller: () {
                 setState(() {
-                  statusMessage = 'APK listo. Abriendo instalador de Android…';
+                  statusMessage = migratingToMyFinc ? 'MyFinc está listo. Abriendo el instalador de Android…' : 'APK listo. Abriendo instalador de Android…';
                 });
               },
             );
@@ -78,7 +79,7 @@ Future<void> showUpdateDialog(
                 case ApkInstallResult.opened:
                   installerOpened = true;
                   statusMessage =
-                      'Android abrió el instalador. Revisa la pantalla del sistema y confirma la instalación.';
+                      migratingToMyFinc ? 'Android abrió el instalador. Confirma MyFinc allí. Android no permite que Finora se desinstale sola; después tendrás que ir a Ajustes > Aplicaciones > Finora > Desinstalar.' : 'Android abrió el instalador. Revisa la pantalla del sistema y confirma la instalación.';
                   break;
                 case ApkInstallResult.permissionRequired:
                   hasError = true;
@@ -100,14 +101,14 @@ Future<void> showUpdateDialog(
             child: AlertDialog(
               title: Text(
                 isUpdating
-                    ? 'Actualizando Finora'
+                    ? migratingToMyFinc ? 'Preparando MyFinc' : 'Actualizando Finora'
                     : installerOpened
                         ? 'Instalador abierto'
                         : hasError
                             ? permissionRequired
                                 ? 'Permiso necesario'
-                                : 'No se pudo actualizar'
-                            : 'Nueva versión disponible',
+                                : migratingToMyFinc ? 'No se pudo preparar MyFinc' : 'No se pudo actualizar'
+                            : migratingToMyFinc ? 'Instalar MyFinc' : 'Nueva versión disponible',
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -121,10 +122,10 @@ Future<void> showUpdateDialog(
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Versión actual: ${update.currentVersion}+${update.currentBuild}',
+                        migratingToMyFinc ? 'Aplicación actual: Finora v${update.currentVersion}' : 'Versión actual: ${update.currentVersion}+${update.currentBuild}',
                       ),
                       Text(
-                        'Nueva versión: ${update.latestVersion}+${update.latestBuild}',
+                        migratingToMyFinc ? 'Destino: MyFinc v${update.latestVersion}' : 'Nueva versión: ${update.latestVersion}+${update.latestBuild}',
                       ),
                       if (update.notes.isNotEmpty) ...[
                         const SizedBox(height: 12),
