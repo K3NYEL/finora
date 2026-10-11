@@ -77,7 +77,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                           fontWeight: FontWeight.w800,
                         )),
                         const SizedBox(height: 3),
-                        Text('${all.length} registros en total',
+                        Text('${all.length} movimientos cargados',
                           style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
                       ],
                     ),
@@ -117,7 +117,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                 children: [
                   Expanded(
                     child: _MovementSummaryCard(
-                      label: 'Ingresos',
+                      label: 'Ingresos recientes',
                       amount: income,
                       icon: Icons.south_west_rounded,
                       color: const Color(0xFF16A34A),
@@ -126,7 +126,7 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _MovementSummaryCard(
-                      label: 'Gastos',
+                      label: 'Gastos recientes',
                       amount: expenses,
                       icon: Icons.north_east_rounded,
                       color: scheme.error,
