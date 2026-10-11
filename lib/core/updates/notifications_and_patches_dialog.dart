@@ -61,10 +61,16 @@ class _NotificationsAndPatchesDialogState
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final dialogWidth = (screenSize.width - 32).clamp(0.0, 520.0);
+    final dialogHeight = (screenSize.height * 0.62).clamp(220.0, 560.0);
+
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       title: const Text('Notificaciones y parches'),
       content: SizedBox(
-        width: 520,
+        width: dialogWidth,
+        height: dialogHeight,
         child: FutureBuilder<FinoraUpdatesManifest>(
           future: _manifestFuture,
           builder: (context, snapshot) {
