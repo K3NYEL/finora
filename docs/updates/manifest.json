@@ -1,6 +1,14 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-10T00:00:00Z",
-  "notifications": [],
+  "updatedAt": "2026-10-11T00:00:00Z",
+  "notifications": [
+    {
+      "id": "release-0.5.31-upcoming",
+      "title": "Próxima actualización: Finora 0.5.31",
+      "message": "Estamos preparando una próxima actualización de Finora. Incluirá mejoras en los avisos de novedades y la solicitud de permisos de notificación en Android. La actualización estará disponible cuando se publique oficialmente; te avisaremos desde este centro.",
+      "publishedAt": "2026-10-11T00:00:00Z",
+      "level": "info"
+    }
+  ],
   "patches": []
 }

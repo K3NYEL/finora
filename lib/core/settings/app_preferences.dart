@@ -8,6 +8,17 @@ class AppPreferences {
   static const _animationsKey = 'animations_enabled';
   static const _currencyKey = 'finance_currency';
   static const _autoBackupFrequencyKey = 'auto_backup_frequency';
+  static const _notificationPermissionPromptedKey = 'notification_permission_prompted';
+
+  static Future<bool> getNotificationPermissionPrompted() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_notificationPermissionPromptedKey) ?? false;
+  }
+
+  static Future<void> setNotificationPermissionPrompted(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_notificationPermissionPromptedKey, value);
+  }
 
   static Future<String> getAutoBackupFrequency() async {
     final prefs = await SharedPreferences.getInstance();

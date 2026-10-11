@@ -14,6 +14,7 @@ import '../../../../features/auth/presentation/session_provider.dart';
 import '../../../../app/settings_provider.dart';
 import '../../../../core/platform/update_service.dart';
 import '../../../../core/updates/notifications_and_patches_dialog.dart';
+import '../../../../core/notifications/notification_permission_service.dart';
 import '../../../../core/database/database.dart';
 import '../../../../core/database/backup_service.dart';
 import '../../../../core/network/finora_api_client.dart';
@@ -1236,6 +1237,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 context: context,
                 builder: (_) => const NotificationsAndPatchesDialog(),
               ),
+            ),
+            _SettingsTile(
+              icon: Icons.notifications_outlined,
+              title: 'Permisos de notificación',
+              subtitle: 'Consultar o cambiar el permiso del dispositivo',
+              onTap: () async {
+                if (!NotificationPermissionService.isAndroid) {
+                  await _showUpdateMessage(
+                    title: 'Permiso no disponible',
+                    message: 'La gestión de permisos de notificación del sistema está disponible en Android.',
+                    icon: Icons.info_outline_rounded,
+                  );
+                  return;
+                }
+                final granted = await NotificationPermissionService.requestPermission();
+                if (!mounted) return;
+                if (!granted) {
+                  await NotificationPermissionService.openSettings();
+                } else {
+                  await _showUpdateMessage(
+                    title: 'Notificaciones permitidas',
+                    message: 'El permiso del dispositivo está activo. Los avisos de versión se consultan dentro del centro de notificaciones de Finora.',
+                    icon: Icons.check_circle_outline_rounded,
+                  );
+                }
+              },
             ),
             _SettingsTile(
               icon: Icons.system_update_outlined,
